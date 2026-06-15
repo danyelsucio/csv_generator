@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 List<CameraDescription> cameras = [];
 
@@ -20,7 +22,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Editor CSV',
+      title: 'CSV',
       theme: ThemeData.dark(),
       home: const CsvPage(),
       debugShowCheckedModeBanner: false,
@@ -38,6 +40,31 @@ class _CsvPageState extends State<CsvPage> {
   List<List<dynamic>> _data = [];
   int? _selectedRow;
   int? _selectedCol;
+  String _textoEscaneadoCompleto = ''; // 👈 GUARDA EL ÚLTIMO OCR
+  List<Map<String, String>> _fundamentos = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarFundamentos();
+  }
+
+  Future<void> _cargarFundamentos() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? fundString = prefs.getString('fundamentos');
+    if (fundString!= null) {
+      setState(() {
+        _fundamentos = List<Map<String, String>>.from(
+          json.decode(fundString).map((x) => Map<String, String>.from(x))
+        );
+      });
+    }
+  }
+
+  Future<void> _guardarFundamentos() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fundamentos', json.encode(_fundamentos));
+  }
 
   Future<void> _cargarCSV() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -53,7 +80,7 @@ class _CsvPageState extends State<CsvPage> {
       ).convert(input);
 
       if (csvTable.length <= 1) {
-        _snack('El CSV no tiene datos o está mal formado');
+        _snack('El CSV no tiene datos');
         return;
       }
 
@@ -72,10 +99,14 @@ class _CsvPageState extends State<CsvPage> {
     }
 
     if (Platform.isAndroid) {
-      var status = await Permission.storage.request();
+      var status = await Permission.manageExternalStorage.request();
       if (!status.isGranted) {
-        _snack('Permiso denegado. Actívalo en Ajustes');
-        return;
+        status = await Permission.storage.request();
+        if (!status.isGranted) {
+          _snack('Permiso denegado. Actívalo en Ajustes');
+          openAppSettings();
+          return;
+        }
       }
     }
 
@@ -86,12 +117,11 @@ class _CsvPageState extends State<CsvPage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text('Guardar CSV como...', style: TextStyle(color: Colors.white)),
+        title: const Text('Guardar como', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            labelText: 'Nombre del archivo',
             suffixText: '.csv',
             labelStyle: TextStyle(color: Colors.white70),
           ),
@@ -105,24 +135,27 @@ class _CsvPageState extends State<CsvPage> {
 
     if (nombreElegido == null || nombreElegido.isEmpty) return;
 
-    String csv = const ListToCsvConverter().convert(_data);
-    String? outputFile = await FilePicker.platform.saveFile(
-      dialogTitle: 'Selecciona dónde guardar:',
-      fileName: '$nombreElegido.csv',
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-    );
+    try {
+      String csv = const ListToCsvConverter().convert(_data);
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Guardar CSV',
+        fileName: '$nombreElegido.csv',
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        bytes: utf8.encode(csv),
+      );
 
-    if (outputFile!= null) {
-      await File(outputFile).writeAsString(csv);
-      _snack('Guardado: $nombreElegido.csv');
+      if (outputFile!= null) {
+        _snack('Guardado: $nombreElegido.csv');
+      }
+    } catch (e) {
+      _snack('Error: $e');
     }
   }
 
-  // MANITA ✋ = SOLO TEXTO MANUAL
-  void _pegarEnCelda() async {
+  void _pegarManual() async {
     if (_selectedRow == null || _selectedCol == null) {
-      _snack('Primero selecciona una celda');
+      _snack('Selecciona una celda primero');
       return;
     }
 
@@ -131,12 +164,8 @@ class _CsvPageState extends State<CsvPage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text('Pegar dato manual', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.white),
-          autofocus: true,
-        ),
+        title: const Text('Dato manual', style: TextStyle(color: Colors.white)),
+        content: TextField(controller: controller, style: const TextStyle(color: Colors.white), autofocus: true),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR')),
           TextButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('PEGAR')),
@@ -150,10 +179,9 @@ class _CsvPageState extends State<CsvPage> {
     }
   }
 
-  // CALENDARIO 📅 = REGRESÓ EL BOTÓN
   void _pegarFecha() async {
     if (_selectedRow == null || _selectedCol == null) {
-      _snack('Primero selecciona una celda');
+      _snack('Selecciona una celda primero');
       return;
     }
 
@@ -162,9 +190,7 @@ class _CsvPageState extends State<CsvPage> {
       initialDate: DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(data: ThemeData.dark(), child: child!);
-      },
+      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
     );
     if (picked!= null) {
       String fecha = DateFormat('dd/MM/yy, h:mm a').format(picked);
@@ -174,43 +200,36 @@ class _CsvPageState extends State<CsvPage> {
     }
   }
 
-  void _agregarFilaVacia() {
-    if (_data.isEmpty) {
-      _snack('Primero carga un CSV');
+  void _gestionarFundamentos() async {
+    if (_selectedRow == null || _selectedCol == null) {
+      _snack('Selecciona una celda primero');
       return;
     }
-    setState(() {
-      _data.add(List.generate(_data[0].length, (index) => ''));
-    });
-    _snack('Fila nueva agregada abajo');
-  }
 
-  // LIBRITO 📚 = REGRESÓ EL BOTÓN DE FUNDAMENTOS
-  void _mostrarFundamentos() {
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('Fundamentos Legales', style: TextStyle(color: Colors.white)),
-        content: const SingleChildScrollView(
-          child: Text(
-            '1. CNPP Art. 211 - Carpeta de Investigación\n\n'
-            '2. Acuerdo A/009/15 - Gestión de folios\n\n'
-            '3. Ley Orgánica FGR Art. 5 - Control de volantes',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CERRAR')),
-        ],
+      builder: (context) => FundamentosDialog(
+        fundamentos: _fundamentos,
+        onGuardar: (nuevas) {
+          setState(() {
+            _fundamentos = nuevas;
+          });
+          _guardarFundamentos();
+        },
+        onPegar: (textos) {
+          setState(() {
+            _data[_selectedRow!][_selectedCol!] = textos.join('\n');
+          });
+          Navigator.pop(context);
+        },
       ),
     );
   }
 
-  // CÁMARA OCR 📷 = AHORA SÍ JALA
+  // 👈 CÁMARA AHORA REGRESA EL TEXTO SELECCIONADO + ACTUALIZA EL COMPLETO
   void _abrirCamaraOCR() async {
     if (_selectedRow == null || _selectedCol == null) {
-      _snack('Primero selecciona una celda para pegar el texto');
+      _snack('Selecciona una celda primero');
       return;
     }
 
@@ -219,16 +238,23 @@ class _CsvPageState extends State<CsvPage> {
       return;
     }
 
-    final textoEscaneado = await Navigator.push<String>(
+    final resultado = await Navigator.push<Map<String, String>>(
       context,
-      MaterialPageRoute(builder: (context) => CameraScreen()),
+      MaterialPageRoute(
+        builder: (context) => CameraScreen(textoAnterior: _textoEscaneadoCompleto),
+      ),
     );
 
-    if (textoEscaneado!= null && textoEscaneado.isNotEmpty) {
+    if (resultado!= null) {
       setState(() {
-        _data[_selectedRow!][_selectedCol!] = textoEscaneado;
+        _textoEscaneadoCompleto = resultado['completo']!; // Guarda todo el OCR
+        if (resultado['seleccion']!.isNotEmpty) {
+          _data[_selectedRow!][_selectedCol!] = resultado['seleccion']!; // Pega la selección
+        }
       });
-      _snack('Texto pegado desde cámara');
+      if (resultado['seleccion']!.isNotEmpty) {
+        _snack('Texto pegado en celda');
+      }
     }
   }
 
@@ -242,19 +268,24 @@ class _CsvPageState extends State<CsvPage> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('Editor CSV'), // 👈 SIN CORONA
+        title: const Text('CSV'),
         actions: [
-          IconButton(icon: const Icon(Icons.upload), onPressed: _cargarCSV, tooltip: 'Subir'),
-          IconButton(icon: const Icon(Icons.download), onPressed: _descargarCSV, tooltip: 'Descargar'),
-          IconButton(icon: const Icon(Icons.back_hand), onPressed: _pegarEnCelda, tooltip: 'Pegar Manual'),
-          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'), // 👈 REGRESÓ
-          IconButton(icon: const Icon(Icons.add), onPressed: _agregarFilaVacia, tooltip: 'Agregar fila'),
-          IconButton(icon: const Icon(Icons.menu_book), onPressed: _mostrarFundamentos, tooltip: 'Fundamentos'), // 👈 REGRESÓ
-          IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'OCR'), // 👈 SÍ JALA
+          IconButton(icon: const Icon(Icons.upload_file), onPressed: _cargarCSV, tooltip: 'Subir'),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.save), onPressed: _descargarCSV, tooltip: 'Guardar'),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.edit), onPressed: _pegarManual, tooltip: 'Manual'),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear y pegar'), // 👈 YA NO HAY BOTÓN +
+          const SizedBox(width: 12),
         ],
       ),
       body: _data.isEmpty
-      ? const Center(child: Text('Sube un CSV para empezar', style: TextStyle(color: Colors.white)))
+    ? const Center(child: Text('Sube un CSV para empezar', style: TextStyle(color: Colors.white)))
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SingleChildScrollView(
@@ -303,8 +334,137 @@ class _CsvPageState extends State<CsvPage> {
   }
 }
 
-// PANTALLA DE CÁMARA CON OCR QUE SÍ JALA
+class FundamentosDialog extends StatefulWidget {
+  final List<Map<String, String>> fundamentos;
+  final Function(List<Map<String, String>>) onGuardar;
+  final Function(List<String>) onPegar;
+
+  const FundamentosDialog({
+    required this.fundamentos,
+    required this.onGuardar,
+    required this.onPegar,
+    super.key,
+  });
+
+  @override
+  State<FundamentosDialog> createState() => _FundamentosDialogState();
+}
+
+class _FundamentosDialogState extends State<FundamentosDialog> {
+  late List<Map<String, String>> _funds;
+  late List<bool> _seleccionados;
+  final tituloCtrl = TextEditingController();
+  final textoCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _funds = List.from(widget.fundamentos);
+    _seleccionados = List.generate(_funds.length, (index) => false);
+  }
+
+  void _agregarFund() {
+    if (tituloCtrl.text.isEmpty || textoCtrl.text.isEmpty) return;
+    setState(() {
+      _funds.add({'titulo': tituloCtrl.text, 'texto': textoCtrl.text});
+      _seleccionados.add(false);
+      tituloCtrl.clear();
+      textoCtrl.clear();
+    });
+    widget.onGuardar(_funds);
+  }
+
+  void _pegarSeleccionados() {
+    List<String> textos = [];
+    for (int i = 0; i < _funds.length; i++) {
+      if (_seleccionados[i]) {
+        textos.add('${_funds[i]['titulo']}: ${_funds[i]['texto']}');
+      }
+    }
+    if (textos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona al menos 1 fundamento')),
+      );
+      return;
+    }
+    widget.onPegar(textos);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: const Text('Fundamentos', style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: tituloCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Título', labelStyle: TextStyle(color: Colors.white70)),
+            ),
+            TextField(
+              controller: textoCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Párrafo', labelStyle: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+              onPressed: _agregarFund,
+              child: const Text('AGREGAR FUNDAMENTO'),
+            ),
+            const Divider(color: Colors.white24),
+            Expanded(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _funds.length,
+                itemBuilder: (context, i) {
+                  return CheckboxListTile(
+                    title: Text(_funds[i]['titulo']!, style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(_funds[i]['texto']!, style: const TextStyle(color: Colors.white70)),
+                    value: _seleccionados[i],
+                    activeColor: Colors.red[900],
+                    onChanged: (bool? value) {
+                      setState(() {
+                        _seleccionados[i] = value!;
+                      });
+                    },
+                    secondary: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          _funds.removeAt(i);
+                          _seleccionados.removeAt(i);
+                        });
+                        widget.onGuardar(_funds);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[900]),
+          onPressed: _pegarSeleccionados,
+          child: const Text('PEGAR SELECCIONADOS'),
+        ),
+      ],
+    );
+  }
+}
+
+// 👈 CÁMARA CON TEXTO SELECCIONABLE + BOTÓN + INTEGRADO
 class CameraScreen extends StatefulWidget {
+  final String textoAnterior;
+  const CameraScreen({super.key, required this.textoAnterior});
+
   @override
   _CameraScreenState createState() => _CameraScreenState();
 }
@@ -314,12 +474,16 @@ class _CameraScreenState extends State<CameraScreen> {
   late Future<void> _initializeControllerFuture;
   final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   bool _procesando = false;
+  String _textoCompleto = '';
+  final TextEditingController _textoController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _controller = CameraController(cameras[0], ResolutionPreset.high);
     _initializeControllerFuture = _controller.initialize();
+    _textoController.text = widget.textoAnterior; // 👈 CARGA EL TEXTO ANTERIOR
+    _textoCompleto = widget.textoAnterior;
   }
 
   Future<void> _escanearTexto() async {
@@ -329,16 +493,36 @@ class _CameraScreenState extends State<CameraScreen> {
       final image = await _controller.takePicture();
       final inputImage = InputImage.fromFilePath(image.path);
       final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      Navigator.pop(context, recognizedText.text.replaceAll('\n', ' '));
+      setState(() {
+        _textoCompleto = recognizedText.text;
+        _textoController.text = recognizedText.text;
+        _procesando = false;
+      });
     } catch (e) {
-      Navigator.pop(context);
+      setState(() => _procesando = false);
     }
+  }
+
+  // 👈 ESTE ES EL BOTÓN + QUE PEGA LA SELECCIÓN
+  void _pegarSeleccionYCerrar() {
+    final seleccion = _textoController.selection;
+    String textoAPegar = '';
+
+    if (seleccion.isValid &&!seleccion.isCollapsed) {
+      textoAPegar = seleccion.textInside(_textoController.text);
+    }
+
+    Navigator.pop(context, {
+      'completo': _textoCompleto, // Siempre regresa el texto completo
+      'seleccion': textoAPegar, // Solo pega si hay selección
+    });
   }
 
   @override
   void dispose() {
     _controller.dispose();
     textRecognizer.close();
+    _textoController.dispose();
     super.dispose();
   }
 
@@ -348,33 +532,68 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('Escanear Texto'),
+        title: const Text('Escanear y seleccionar'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _pegarSeleccionYCerrar, // 👈 BOTÓN + EN LA CÁMARA
+            tooltip: 'Pegar selección a celda',
+          ),
+        ],
       ),
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            return Stack(
-              children: [
-                CameraPreview(_controller),
-                if (_procesando)
-                  Container(
-                    color: Colors.black54,
-                    child: const Center(
-                      child: CircularProgressIndicator(color: Colors.red),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 2,
+            child: FutureBuilder<void>(
+              future: _initializeControllerFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return CameraPreview(_controller);
+                } else {
+                  return const Center(child: CircularProgressIndicator());
+                }
+              },
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Container(
+              color: Colors.grey[900],
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  const Text(
+                    'Selecciona texto con el dedo y pica +',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _textoController,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Toma foto para escanear texto...',
+                        hintStyle: TextStyle(color: Colors.white38),
+                      ),
                     ),
                   ),
-              ],
-            );
-          } else {
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
-        child: const Icon(Icons.camera),
+        child: _procesando
+       ? const CircularProgressIndicator(color: Colors.white)
+            : const Icon(Icons.camera),
       ),
     );
   }
