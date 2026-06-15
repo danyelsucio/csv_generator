@@ -192,7 +192,7 @@ class _CsvPageState extends State<CsvPage> {
       builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
     );
     if (picked!= null) {
-      String fecha = DateFormat('dd/MM/yy, h:mm a').format(picked);
+      String fecha = DateFormat('dd/MM/yy').format(picked);
       setState(() {
         _data[_selectedRow!][_selectedCol!] = fecha;
       });
