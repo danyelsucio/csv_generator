@@ -98,4 +98,46 @@ class _CameraScreenState extends State<CameraScreen> {
     if (!_controller.value.isInitialized) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Colors.red
+        body: Center(child: CircularProgressIndicator(color: Colors.red)),
+      );
+    }
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text('Escanear Texto', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Column(
+        children: [
+          Expanded(child: CameraPreview(_controller)),
+          Container(
+            height: 200,
+            color: Colors.grey[900],
+            padding: const EdgeInsets.all(8),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                _text,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+          ),
+          Container(
+            color: Colors.black,
+            padding: const EdgeInsets.all(16),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[900],
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              onPressed: _isBusy? null : _scanImage,
+              child: _isBusy
+                 ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('ESCANEAR', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
