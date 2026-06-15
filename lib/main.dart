@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:permission_handler/permission_handler.dart';
 
 List<CameraDescription> cameras = [];
 
@@ -102,19 +103,31 @@ Future<void> _descargarCSV() async {
     return;
   }
 
-  // Pedir nombre del archivo
+  // Pedir permiso en Android
+  var status = await Permission.storage.request();
+  if (!status.isGranted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Permiso denegado. Actívalo en Ajustes > Apps')),
+    );
+    return;
+  }
+
+  // Nombre default
   String nombreArchivo = 'Pendientes_${DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now())}';
   final nombreController = TextEditingController(text: nombreArchivo);
-  
+
   final nombreElegido = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Guardar CSV como...'),
+      backgroundColor: Colors.grey[900],
+      title: const Text('Guardar CSV como...', style: TextStyle(color: Colors.white)),
       content: TextField(
         controller: nombreController,
+        style: const TextStyle(color: Colors.white),
         decoration: const InputDecoration(
           labelText: 'Nombre del archivo',
           suffixText: '.csv',
+          labelStyle: TextStyle(color: Colors.white70),
         ),
         autofocus: true,
       ),
@@ -125,7 +138,7 @@ Future<void> _descargarCSV() async {
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, nombreController.text),
-          child: const Text('SIGUIENTE'),
+          child: const Text('GUARDAR'),
         ),
       ],
     ),
@@ -133,10 +146,9 @@ Future<void> _descargarCSV() async {
 
   if (nombreElegido == null || nombreElegido.isEmpty) return;
 
-  // Convertir a CSV
   String csv = const ListToCsvConverter().convert(_data);
-  
-  // Abrir selector de carpeta para guardar
+
+  // Esto abre el explorador para elegir carpeta
   String? outputFile = await FilePicker.platform.saveFile(
     dialogTitle: 'Selecciona dónde guardar:',
     fileName: '$nombreElegido.csv',
@@ -149,13 +161,12 @@ Future<void> _descargarCSV() async {
     await file.writeAsString(csv);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Guardado en: $outputFile'),
-        duration: const Duration(seconds: 3),
+        content: Text('Guardado: $nombreElegido.csv'),
+        backgroundColor: Colors.green[800],
       ),
     );
   }
 }
-
   // CALENDARIO
   Future<void> _mostrarCalendario() async {
     if (_selectedRow == null) return;
