@@ -93,16 +93,68 @@ class _CSVEditorState extends State<CSVEditor> {
   }
 
   // DESCARGAR CSV
-  Future<void> _descargarCSV() async {
-    if (_data.isEmpty) return;
-    String csv = const ListToCsvConverter().convert(_data);
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/editado_${DateTime.now().millisecondsSinceEpoch}.csv');
+  // DESCARGAR CSV - CON NOMBRE Y CARPETA A ELEGIR
+Future<void> _descargarCSV() async {
+  if (_data.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No hay datos para guardar')),
+    );
+    return;
+  }
+
+  // Pedir nombre del archivo
+  String nombreArchivo = 'Pendientes_${DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now())}';
+  final nombreController = TextEditingController(text: nombreArchivo);
+  
+  final nombreElegido = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Guardar CSV como...'),
+      content: TextField(
+        controller: nombreController,
+        decoration: const InputDecoration(
+          labelText: 'Nombre del archivo',
+          suffixText: '.csv',
+        ),
+        autofocus: true,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('CANCELAR'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, nombreController.text),
+          child: const Text('SIGUIENTE'),
+        ),
+      ],
+    ),
+  );
+
+  if (nombreElegido == null || nombreElegido.isEmpty) return;
+
+  // Convertir a CSV
+  String csv = const ListToCsvConverter().convert(_data);
+  
+  // Abrir selector de carpeta para guardar
+  String? outputFile = await FilePicker.platform.saveFile(
+    dialogTitle: 'Selecciona dónde guardar:',
+    fileName: '$nombreElegido.csv',
+    type: FileType.custom,
+    allowedExtensions: ['csv'],
+  );
+
+  if (outputFile!= null) {
+    final file = File(outputFile);
     await file.writeAsString(csv);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Guardado: ${file.path}')),
+      SnackBar(
+        content: Text('Guardado en: $outputFile'),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
+}
 
   // CALENDARIO
   Future<void> _mostrarCalendario() async {
