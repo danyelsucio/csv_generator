@@ -37,7 +37,7 @@ class CsvPage extends StatefulWidget {
 }
 
 class _CsvPageState extends State<CsvPage> {
-  List<List<dynamic>> _data = [];
+  List<String> _fundamentos = []; // 👈 AHORA ES SOLO LISTA DE TEXTOS
   int? _selectedRow;
   int? _selectedCol;
   String _textoEscaneadoCompleto = ''; // 👈 GUARDA EL ÚLTIMO OCR
@@ -54,9 +54,7 @@ class _CsvPageState extends State<CsvPage> {
     final String? fundString = prefs.getString('fundamentos');
     if (fundString!= null) {
       setState(() {
-        _fundamentos = List<Map<String, String>>.from(
-          json.decode(fundString).map((x) => Map<String, String>.from(x))
-        );
+        _fundamentos = List<String>.from(json.decode(fundString)); // 👈 SOLO STRINGS
       });
     }
   }
@@ -350,11 +348,26 @@ class FundamentosDialog extends StatefulWidget {
   State<FundamentosDialog> createState() => _FundamentosDialogState();
 }
 
+class FundamentosDialog extends StatefulWidget {
+  final List<String> fundamentos;
+  final Function(List<String>) onGuardar;
+  final Function(List<String>) onPegar;
+
+  const FundamentosDialog({
+    required this.fundamentos,
+    required this.onGuardar,
+    required this.onPegar,
+    super.key,
+  });
+
+  @override
+  State<FundamentosDialog> createState() => _FundamentosDialogState();
+}
+
 class _FundamentosDialogState extends State<FundamentosDialog> {
-  late List<Map<String, String>> _funds;
+  late List<String> _funds;
   late List<bool> _seleccionados;
-  final tituloCtrl = TextEditingController();
-  final textoCtrl = TextEditingController();
+  final textoCtrl = TextEditingController(); // 👈 YA NO HAY TITULO
 
   @override
   void initState() {
@@ -364,11 +377,10 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
   }
 
   void _agregarFund() {
-    if (tituloCtrl.text.isEmpty || textoCtrl.text.isEmpty) return;
+    if (textoCtrl.text.isEmpty) return;
     setState(() {
-      _funds.add({'titulo': tituloCtrl.text, 'texto': textoCtrl.text});
+      _funds.add(textoCtrl.text); // 👈 SOLO EL PÁRRAFO
       _seleccionados.add(false);
-      tituloCtrl.clear();
       textoCtrl.clear();
     });
     widget.onGuardar(_funds);
@@ -378,12 +390,12 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
     List<String> textos = [];
     for (int i = 0; i < _funds.length; i++) {
       if (_seleccionados[i]) {
-        textos.add('${_funds[i]['titulo']}: ${_funds[i]['texto']}');
+        textos.add(_funds[i]); // 👈 YA NO CONCATENA TÍTULO
       }
     }
     if (textos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona al menos 1 fundamento')),
+        const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
       );
       return;
     }
@@ -394,26 +406,28 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.grey[900],
-      title: const Text('Fundamentos', style: TextStyle(color: Colors.white)),
+      title: const Text('Párrafos', style: TextStyle(color: Colors.white)), // 👈 CAMBIÓ TÍTULO
       content: SizedBox(
         width: double.maxFinite,
         height: 400,
         child: Column(
           children: [
             TextField(
-              controller: tituloCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Título', labelStyle: TextStyle(color: Colors.white70)),
-            ),
-            TextField(
               controller: textoCtrl,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Párrafo', labelStyle: TextStyle(color: Colors.white70)),
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Párrafo', // 👈 SOLO PÁRRAFO
+                labelStyle: TextStyle(color: Colors.white70),
+                hintText: 'Escribe tu fundamento aquí...',
+                hintStyle: TextStyle(color: Colors.white38),
+              ),
             ),
+            const SizedBox(height: 8),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
               onPressed: _agregarFund,
-              child: const Text('AGREGAR FUNDAMENTO'),
+              child: const Text('AGREGAR PÁRRAFO'),
             ),
             const Divider(color: Colors.white24),
             Expanded(
@@ -422,8 +436,12 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
                 itemCount: _funds.length,
                 itemBuilder: (context, i) {
                   return CheckboxListTile(
-                    title: Text(_funds[i]['titulo']!, style: const TextStyle(color: Colors.white)),
-                    subtitle: Text(_funds[i]['texto']!, style: const TextStyle(color: Colors.white70)),
+                    title: Text(
+                      _funds[i],
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ), // 👈 SOLO EL TEXTO
                     value: _seleccionados[i],
                     activeColor: Colors.red[900],
                     onChanged: (bool? value) {
