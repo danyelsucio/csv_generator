@@ -37,6 +37,7 @@ class CsvPage extends StatefulWidget {
 }
 
 class _CsvPageState extends State<CsvPage> {
+  List<List<dynamic>> _data = [];
   List<String> _fundamentos = []; // 👈 AHORA ES SOLO LISTA DE TEXTOS
   int? _selectedRow;
   int? _selectedCol;
