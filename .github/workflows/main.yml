@@ -1,4 +1,4 @@
-name: Compilar csv_generator
+name: Compilar Contador
 on: [workflow_dispatch]
 
 jobs:
@@ -6,27 +6,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
-          
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
-          
-      - run: flutter create .
-      
-      - name: Parche SDK 35
-        run: sed -i 's/compileSdkVersion.*/compileSdkVersion 35/' android/app/build.gradle
-        
-      - name: Parche Kotlin 1.9
-        run: sed -i 's/ext.kotlin_version.*/ext.kotlin_version = "1.9.22"/' android/build.gradle
-        
+          flutter-version: '3.22.3'
+
+      - run: flutter create. --project-name contador --platforms android
       - run: flutter pub get
       - run: flutter build apk --release
-      
+
       - uses: actions/upload-artifact@v4
         with:
           name: contador-apk
