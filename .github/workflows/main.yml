@@ -1,4 +1,4 @@
-name: csv_generator
+name: Compilar csv_generator
 on: [workflow_dispatch]
 
 jobs:
@@ -17,6 +17,13 @@ jobs:
           flutter-version: '3.24.0'
           
       - run: flutter create .
+      
+      - name: Parche SDK 35
+        run: sed -i 's/compileSdkVersion.*/compileSdkVersion 35/' android/app/build.gradle
+        
+      - name: Parche Kotlin 1.9
+        run: sed -i 's/ext.kotlin_version.*/ext.kotlin_version = "1.9.22"/' android/build.gradle
+        
       - run: flutter pub get
       - run: flutter build apk --release
       
