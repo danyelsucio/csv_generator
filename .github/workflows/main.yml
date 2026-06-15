@@ -1,4 +1,4 @@
-name: Compilar Contador
+name: Compilar csv_generator
 on: [workflow_dispatch]
 
 jobs:
