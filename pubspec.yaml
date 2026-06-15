@@ -1,4 +1,4 @@
-name: contador
+name: csv_generator
 description: Scanner OCR desde GitHub
 publish_to: 'none'
 version: 1.0.0+1
