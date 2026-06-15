@@ -42,7 +42,7 @@ class _CsvPageState extends State<CsvPage> {
   int? _selectedRow;
   int? _selectedCol;
   String _textoEscaneadoCompleto = ''; // 👈 GUARDA EL ÚLTIMO OCR
-  List<Map<String, String>> _fundamentos = [];
+  
 
   @override
   void initState() {
