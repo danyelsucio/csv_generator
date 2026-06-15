@@ -378,7 +378,7 @@ Future<void> _descargarCSV() async {
                   columns: List.generate(
                     _data[0].length,
                     (i) => DataColumn(
-                      label: Text('Col ${i + 1}',
+                       label: Text(_data[0][i], // ✅ BIEN - Usa tu encabezado real
                         style: const TextStyle(color: Colors.white)),
                     ),
                   ),
