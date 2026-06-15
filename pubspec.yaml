@@ -1,0 +1,28 @@
+name: contador
+description: Scanner OCR desde GitHub
+publish_to: 'none'
+version: 1.0.0+1
+shared_preferences: ^2.2.2
+
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.10.5+5
+  google_mlkit_text_recognition: ^0.11.0
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  shared_preferences: ^2.2.2
+  excel: ^4.0.2
+  path_provider: ^2.1.2
+  csv: ^5.1.1
+
+flutter:
+  uses-material-design: true
+
+  # PEGA ESTO RESPETANDO LOS 2 ESPACIOS
+  assets:
+    - assets/images/
