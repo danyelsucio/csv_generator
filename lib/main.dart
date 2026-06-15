@@ -333,21 +333,6 @@ class _CsvPageState extends State<CsvPage> {
   }
 }
 
-class FundamentosDialog extends StatefulWidget {
-  final List<Map<String, String>> fundamentos;
-  final Function(List<Map<String, String>>) onGuardar;
-  final Function(List<String>) onPegar;
-
-  const FundamentosDialog({
-    required this.fundamentos,
-    required this.onGuardar,
-    required this.onPegar,
-    super.key,
-  });
-
-  @override
-  State<FundamentosDialog> createState() => _FundamentosDialogState();
-}
 
 class FundamentosDialog extends StatefulWidget {
   final List<String> fundamentos;
