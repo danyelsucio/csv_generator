@@ -14,6 +14,52 @@ void main() async {
   runApp(const MyApp());
 }
 
+class ResaltadorController extends TextEditingController {
+  final bool resaltar;
+
+  ResaltadorController({String? text, this.resaltar = false}) : super(text: text);
+
+  @override
+  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
+    final List<TextSpan> spans = [];
+    final String text = this.text;
+    final baseStyle = style?? const TextStyle(color: Colors.white, fontSize: 16, height: 1.5);
+
+    if (!resaltar || text.isEmpty) {
+      return TextSpan(
+        text: text.isEmpty? 'Pega tu texto aquí...' : text,
+        style: text.isEmpty? baseStyle.copyWith(color: Colors.white38) : baseStyle,
+      );
+    }
+
+    final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
+    int lastMatchEnd = 0;
+
+    for (final Match match in exp.allMatches(text)) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastMatchEnd, match.start),
+          style: baseStyle,
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(0),
+        style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+      ));
+      lastMatchEnd = match.end;
+    }
+
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd),
+        style: baseStyle,
+      ));
+    }
+
+    return TextSpan(children: spans);
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -36,7 +82,7 @@ class OficiosPage extends StatefulWidget {
 class _OficiosPageState extends State<OficiosPage> {
   List<String> _fundamentos = [];
   String _textoEscaneadoCompleto = '';
-  final TextEditingController _controller = TextEditingController();
+  late ResaltadorController _controller; // 👈 CAMBIÓ
   final FocusNode _focusNode = FocusNode();
   bool _resaltarCampos = false;
   final ScrollController _scrollController = ScrollController();
@@ -44,6 +90,7 @@ class _OficiosPageState extends State<OficiosPage> {
   @override
   void initState() {
     super.initState();
+    _controller = ResaltadorController(resaltar: _resaltarCampos); // 👈 INICIALIZA
     _cargarFundamentos();
     Future.delayed(Duration.zero, () => _focusNode.requestFocus());
   }
@@ -151,10 +198,16 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _aplicarResaltado() {
-    setState(() {
-      _resaltarCampos =!_resaltarCampos;
-    });
-    _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
+  setState(() {
+    _resaltarCampos =!_resaltarCampos;
+    // 👇 Creamos controller nuevo con el texto actual y el nuevo estado
+    final textoActual = _controller.text;
+    final seleccionActual = _controller.selection;
+    _controller.dispose();
+    _controller = ResaltadorController(text: textoActual, resaltar: _resaltarCampos);
+    _controller.selection = seleccionActual;
+  });
+  _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
   }
 
   List<TextSpan> _buildTextSpans(String text) {
@@ -248,45 +301,29 @@ class _OficiosPageState extends State<OficiosPage> {
         ],
       ),
       body: Container(
-        margin: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.red[900]!),
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF0A0A0A),
-        ),
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          padding: const EdgeInsets.all(12),
-          child: Stack(
-            children: [
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, value, child) {
-                  return SelectableText.rich(
-                    TextSpan(children: _buildTextSpans(value.text)),
-                  );
-                },
-              ),
-              TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                scrollController: _scrollController,
-                style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
-                cursorColor: Colors.red,
-                maxLines: null,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+  margin: const EdgeInsets.all(12),
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.red[900]!),
+    borderRadius: BorderRadius.circular(8),
+    color: const Color(0xFF0A0A0A),
+  ),
+  child: TextField(
+    controller: _controller,
+    focusNode: _focusNode,
+    scrollController: _scrollController,
+    style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+    cursorColor: Colors.red,
+    maxLines: null,
+    expands: true, // 👈 Esto hace que llene todo el container
+    textAlignVertical: TextAlignVertical.top,
+    decoration: const InputDecoration(
+      border: InputBorder.none,
+      contentPadding: EdgeInsets.all(12),
+      hintText: 'Pega tu texto aquí...',
+      hintStyle: TextStyle(color: Colors.white38),
+    ),
+  ),
+),
 
 class FundamentosDialog extends StatefulWidget {
   final List<String> fundamentos;
