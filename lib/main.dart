@@ -86,47 +86,25 @@ class _CsvPageState extends State<CsvPage> {
 
     if (result!= null) {
       final bytes = result.files.first.bytes!;
-      String content;
 
-      // 👇 INTENTA UTF-8 PRIMERO - La mayoría de CSVs modernos vienen así
-      try {
-        content = utf8.decode(bytes);
-      } catch (e) {
-        // 👇 SI TRUENA, ENTONCES SÍ ES LATIN1 DE EXCEL VIEJO
-        content = latin1.decode(bytes);
-      }
+      // 👇 FUÉRZALO A UTF-8 - Sin try/catch, sin Latin1
+      String content = utf8.decode(bytes, allowMalformed: true);
 
-      // Quitar BOM si existe
       if (content.startsWith('\uFEFF')) {
         content = content.substring(1);
-      }
-
-      if (content.trim().isEmpty) {
-        _snack('El archivo está vacío');
-        return;
       }
 
       List<List<dynamic>> fields = const CsvToListConverter(
         shouldParseNumbers: false,
       ).convert(content);
 
-      if (fields.isEmpty) {
-        _snack('CSV sin filas válidas');
-        return;
-      }
-
-      // 👇 YA NO HAGAS REPLACE - Si se leyó bien, no lo necesita
-      // Quita todo este bloque de .replaceAll porque ya no aplica
-
-      String nombreArchivo = result.files.first.name.replaceAll('.csv', '');
-
       setState(() {
         _data = fields;
         _selectedRow = null;
         _selectedCol = null;
-        _folderName = nombreArchivo;
+        _folderName = result.files.first.name.replaceAll('.csv', '');
       });
-      _snack('CSV cargado: $nombreArchivo - ${fields.length - 1} filas');
+      _snack('CSV cargado: ${fields.length - 1} filas');
     }
   } catch (e) {
     _snack('Error al cargar CSV: $e');
