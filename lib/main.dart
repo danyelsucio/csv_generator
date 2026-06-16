@@ -73,45 +73,56 @@ class _CsvPageState extends State<CsvPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('fundamentos', json.encode(_fundamentos));
   }
-
-  Future<void> _cargarCSV() async {
-  // 1. PEDIR PERMISO ANTES DE TODO
-  var status = await Permission.manageExternalStorage.request();
   
-  if (status.isGranted) {
-    // 2. SI TE DIERON PERMISO, ABRE EL FILE PICKER
+  //cambio para que si abra los que trabaja mi app
+  Future<void> _cargarCSV() async {
+  try {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
+      withData: true,
     );
-    
-    if (result != null) {
-      final file = File(result.files.single.path!);
-      final input = await file.readAsString();
-      List<List<dynamic>> csvTable = const CsvToListConverter(
-        shouldParseNumbers: false,
-        eol: '\n',
-      ).convert(input);
 
-      if (csvTable.length <= 1) {
-        _snack('El CSV no tiene datos');
+    if (result != null) {
+      // Lee los bytes y quita BOM de UTF-8
+      String content = utf8.decode(result.files.first.bytes!, allowMalformed: true);
+      
+      // Quita BOM si existe: \uFEFF
+      if (content.startsWith('\uFEFF')) {
+        content = content.substring(1);
+      }
+      
+      // Quita líneas completamente vacías
+      List<String> lineas = content.split('\n');
+      lineas.removeWhere((linea) => linea.trim().isEmpty);
+      content = lineas.join('\n');
+      
+      if (content.trim().isEmpty) {
+        _snack('El archivo está vacío');
         return;
       }
 
+      // Usa CsvToListConverter pero con eol: \n para forzar
+      List<List<dynamic>> fields = const CsvToListConverter(
+        eol: '\n',
+        shouldParseNumbers: false,
+      ).convert(content);
+      
+      // Filtra filas que estén 100% vacías
+      fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
+
       setState(() {
-        _data = csvTable;
+        _data = fields;
         _selectedRow = null;
         _selectedCol = null;
       });
-      _snack('CSV cargado con éxito');
+      _snack('CSV cargado: ${result.files.first.name}');
     }
-  } else {
-    // 4. SI NO TE DIERON PERMISO, MÁNDALO A AJUSTES
-    openAppSettings();
-    _snack('Permiso denegado. Actívalo en Ajustes');
+  } catch (e) {
+    _snack('Error al cargar: $e');
   }
   }
-
+//aqui termina cargar csv 
   Future<void> _descargarCSV() async {
     if (_data.isEmpty) {
       _snack('No hay datos para guardar');
