@@ -8,7 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:permission_handler/permission_handler.dart';
+
 
 
 List<CameraDescription> cameras = [];
@@ -51,7 +51,12 @@ class _CsvPageState extends State<CsvPage> {
     super.initState();
     _cargarFundamentos();
     // funcion nueva
-    // 👇 PÉGALA AQUÍ, DESPUÉS DE LA LÍNEA 51
+    
+    //termina funcion nueva
+  }
+
+  //nueva pegada
+  // 👇 PÉGALA AQUÍ, DESPUÉS DE LA LÍNEA 51
 Future<void> _abrirCsv() async {
   // 1. PEDIR PERMISO ANTES DE TODO
   var status = await Permission.manageExternalStorage.request();
@@ -75,8 +80,7 @@ Future<void> _abrirCsv() async {
     openAppSettings();
   }
 }
-    //termina funcion nueva
-  }
+  //termina nueva pegada
 
   Future<void> _cargarFundamentos() async {
     final prefs = await SharedPreferences.getInstance();
