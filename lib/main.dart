@@ -140,71 +140,69 @@ class _OficiosPageState extends State<OficiosPage> {
   void _limpiarTexto() {
     setState(() {
       _controller.clear();
+      _resaltarCampos = false;
     });
     _snack('Texto limpiado');
   }
 
-  List<TextSpan> _buildTextSpans(String text) {
-  final List<TextSpan> spans = [];
-
-  // 👇 Si no está activado el resaltado, todo blanco
-  if (!_resaltarCampos) {
-    spans.add(TextSpan(
-      text: text.isEmpty? 'Pega tu texto aquí...' : text,
-      style: TextStyle(
-        color: text.isEmpty? Colors.white38 : Colors.white,
-        fontSize: 16,
-        height: 1.5
-      ),
-    ));
-    return spans;
+  bool _tieneCampos() {
+    return RegExp(r'\{\{[^}]+\}\}').hasMatch(_controller.text);
   }
 
-  // 👇 Si está activado, pinta los {{CAMPOS}} de rojo
-  final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
-  int lastMatchEnd = 0;
+  void _aplicarResaltado() {
+    setState(() {
+      _resaltarCampos =!_resaltarCampos;
+    });
+    _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
+  }
 
-  for (final Match match in exp.allMatches(text)) {
-    if (match.start > lastMatchEnd) {
+  List<TextSpan> _buildTextSpans(String text) {
+    final List<TextSpan> spans = [];
+
+    if (!_resaltarCampos) {
       spans.add(TextSpan(
-        text: text.substring(lastMatchEnd, match.start),
+        text: text.isEmpty? 'Pega tu texto aquí...' : text,
+        style: TextStyle(
+            color: text.isEmpty? Colors.white38 : Colors.white,
+            fontSize: 16,
+            height: 1.5),
+      ));
+      return spans;
+    }
+
+    final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
+    int lastMatchEnd = 0;
+
+    for (final Match match in exp.allMatches(text)) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastMatchEnd, match.start),
+          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(0),
+        style: const TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold, height: 1.5),
+      ));
+      lastMatchEnd = match.end;
+    }
+
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd),
         style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
       ));
     }
-    spans.add(TextSpan(
-      text: match.group(0),
-      style: const TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold, height: 1.5),
-    ));
-    lastMatchEnd = match.end;
+
+    if (spans.isEmpty) {
+      spans.add(const TextSpan(
+        text: 'Pega tu texto aquí...',
+        style: TextStyle(color: Colors.white38, fontSize: 16, height: 1.5),
+      ));
+    }
+
+    return spans;
   }
-
-  if (lastMatchEnd < text.length) {
-    spans.add(TextSpan(
-      text: text.substring(lastMatchEnd),
-      style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-    ));
-  }
-
-  if (spans.isEmpty) {
-    spans.add(const TextSpan(
-      text: 'Pega tu texto aquí...',
-      style: TextStyle(color: Colors.white38, fontSize: 16, height: 1.5),
-    ));
-  }
-
-  return spans;
-  }
-
-  bool _tieneCampos() {
-  return RegExp(r'\{\{[^}]+\}\}').hasMatch(_controller.text);
-}
-
-void _aplicarResaltado() {
-  setState(() {
-    _resaltarCampos =!_resaltarCampos; // 👈 Toggle: si está rojo lo quita, si está normal lo pone
-  });
-  _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
-}
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -222,68 +220,68 @@ void _aplicarResaltado() {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-  backgroundColor: Colors.red[900],
-  title: const Text('OFICIOS'),
-  actions: [
-    // 👇 BOTÓN MÁGICO: Solo aparece si hay {{CAMPOS}}
-    ValueListenableBuilder<TextEditingValue>(
-      valueListenable: _controller,
-      builder: (context, value, child) {
-        if (!_tieneCampos()) return const SizedBox.shrink();
-        return IconButton(
-          icon: Icon(
-            _resaltarCampos? Icons.change_circle : Icons.change_circle_outlined,
-            color: _resaltarCampos? Colors.yellow : Colors.white,
-          ),
-          onPressed: _aplicarResaltado,
-          tooltip: 'Resaltar campos',
-        );
-      },
-    ),
-    IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
-    IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
-    IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
-    IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTodo, tooltip: 'Copiar'),
-    IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
-    const SizedBox(width: 8),
-  ],
-),
-    body: Padding(
-  padding: const EdgeInsets.all(12),
-  child: Container(
-    decoration: BoxDecoration(
-      border: Border.all(color: Colors.red[900]!),
-      borderRadius: BorderRadius.circular(8),
-      color: const Color(0xFF0A0A0A),
-    ),
-    child: Stack(
-      children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: ValueListenableBuilder<TextEditingValue>(
+        backgroundColor: Colors.red[900],
+        title: const Text('OFICIOS'),
+        actions: [
+          ValueListenableBuilder<TextEditingValue>(
             valueListenable: _controller,
             builder: (context, value, child) {
-              return SelectableText.rich(
-                TextSpan(children: _buildTextSpans(value.text + '\n')),
+              if (!_tieneCampos()) return const SizedBox.shrink();
+              return IconButton(
+                icon: Icon(
+                  _resaltarCampos? Icons.change_circle : Icons.change_circle_outlined,
+                  color: _resaltarCampos? Colors.yellow : Colors.white,
+                ),
+                onPressed: _aplicarResaltado,
+                tooltip: 'Resaltar campos',
               );
             },
           ),
+          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
+          IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
+          IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
+          IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTodo, tooltip: 'Copiar'),
+          IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Container(
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.red[900]!),
+          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFF0A0A0A),
         ),
-        TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
-          cursorColor: Colors.red,
-          maxLines: null,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.all(12),
-          ),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, child) {
+                  return SelectableText.rich(
+                    TextSpan(children: _buildTextSpans(value.text)),
+                  );
+                },
+              ),
+            ),
+            TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
+              cursorColor: Colors.red,
+              maxLines: null,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.all(12),
+              ),
+            ),
+          ],
         ),
-      ], // 👈 Este ] estaba mal cerrado
-    ), // 👈 Este ) del Container
-  ), // 👈 Este ) del Padding
-), // 👈 Este ) del body
+      ),
+    );
+  }
+}
 
 class FundamentosDialog extends StatefulWidget {
   final List<String> fundamentos;
