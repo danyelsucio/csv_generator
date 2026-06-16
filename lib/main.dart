@@ -44,7 +44,7 @@ class _CsvPageState extends State<CsvPage> {
   int? _selectedRow;
   int? _selectedCol;
   String _textoEscaneadoCompleto = ''; // 👈 GUARDA EL ÚLTIMO OCR
-  String _ folderName = '';
+  String _folderName = '';
 
   @override
   void initState() {
@@ -323,8 +323,24 @@ if (outputFile!= null) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.red[900],
-        title: const Text('CSV'),
+  backgroundColor: Colors.red[900],
+  title: Row(
+    children: [
+      const Text('CSV'),
+      if (_folderName.isNotEmpty)...[
+        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(_folderName, style: const TextStyle(fontSize: 12)),
+        ),
+      ],
+    ],
+  ),
+   
         actions: [
           IconButton(
   icon: const Icon(Icons.clear_all), 
@@ -333,6 +349,7 @@ if (outputFile!= null) {
       _data = [];
       _selectedRow = null;
       _selectedCol = null;
+      _folderName = '';
     });
     _snack('Tabla limpiada');
   }, 
