@@ -206,15 +206,70 @@ class _OficiosPageState extends State<OficiosPage> {
     }
   }
 
-  Map<String, int>? _buscarCampoEnPosicion(int pos) {
+  Map<String, dynamic>? _buscarCampoEnPosicion(int pos) {
     final text = _controller.text;
-    final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
+    final RegExp exp = RegExp(r'\{\{([^}]+)\}\}');
     for (final match in exp.allMatches(text)) {
       if (pos >= match.start && pos <= match.end) {
-        return {'inicio': match.start, 'fin': match.end};
+        return {
+          'inicio': match.start,
+          'fin': match.end,
+          'contenido': match.group(1)!.trim() // 👈 Lo de adentro sin llaves
+        };
       }
     }
     return null;
+  }
+
+  // 👇 NUEVO: Menú rápido para CALIDAD
+  void _mostrarOpcionesCalidad(String campo) async {
+    // Filtra fundamentos con título = contenido del campo
+    final opciones = _fundamentos
+       .where((f) => f['titulo']!.toUpperCase() == campo.toUpperCase())
+       .toList();
+
+    if (opciones.isEmpty) {
+      _snack('No hay opciones registradas para $campo');
+      return;
+    }
+
+    final seleccion = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text('Selecciona $campo', style: const TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: opciones.length,
+            itemBuilder: (context, i) {
+              return ListTile(
+                title: Text(
+                  opciones[i]['texto']!,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () => Navigator.pop(context, opciones[i]['texto']),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (seleccion!= null) {
+      _insertarTexto(seleccion);
+    }
+  }
+
+  // 👇 NUEVO: Detecta long press en el TextField
+  void _manejarLongPress() {
+    final int pos = _controller.selection.baseOffset;
+    if (pos < 0) return;
+    final campo = _buscarCampoEnPosicion(pos);
+    if (campo!= null) {
+      _mostrarOpcionesCalidad(campo['contenido']);
+    }
   }
 
   void _insertarTexto(String texto) {
@@ -234,7 +289,7 @@ class _OficiosPageState extends State<OficiosPage> {
       });
     } else {
       final String nuevoTexto = cursorPos >= 0
-   ? textoActual.replaceRange(cursorPos, cursorPos, texto)
+  ? textoActual.replaceRange(cursorPos, cursorPos, texto)
         : textoActual + texto;
       final int nuevaPos = cursorPos >= 0? cursorPos + texto.length : nuevoTexto.length;
 
@@ -337,20 +392,23 @@ class _OficiosPageState extends State<OficiosPage> {
           borderRadius: BorderRadius.circular(8),
           color: const Color(0xFF0A0A0A),
         ),
-        child: TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          scrollController: _scrollController,
-          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-          cursorColor: Colors.red,
-          maxLines: null,
-          expands: true,
-          textAlignVertical: TextAlignVertical.top,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.all(12),
-            hintText: 'Pega tu texto aquí...',
-            hintStyle: TextStyle(color: Colors.white38),
+        child: GestureDetector(
+          onLongPress: _manejarLongPress, // 👈 AQUÍ ESTÁ LA MAGIA
+          child: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            scrollController: _scrollController,
+            style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+            cursorColor: Colors.red,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.all(12),
+              hintText: 'Pega tu texto aquí...',
+              hintStyle: TextStyle(color: Colors.white38),
+            ),
           ),
         ),
       ),
@@ -358,7 +416,6 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 }
 
-// 👇 PÁGINA NUEVA DE FUNDAMENTOS CON SELECCIÓN AZUL
 class FundamentosPage extends StatefulWidget {
   final List<Map<String, String>> fundamentos;
   const FundamentosPage({required this.fundamentos, super.key});
@@ -370,7 +427,7 @@ class FundamentosPage extends StatefulWidget {
 class _FundamentosPageState extends State<FundamentosPage> {
   final TextEditingController _inputCtrl = TextEditingController();
   late List<Map<String, String>> _funds;
-  Set<int> _seleccionados = {}; // 👈 Guarda índices de párrafos azules
+  Set<int> _seleccionados = {};
 
   @override
   void initState() {
@@ -421,29 +478,25 @@ class _FundamentosPageState extends State<FundamentosPage> {
   }
 
   void _insertarSeleccionados() {
-  if (_seleccionados.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
-    );
-    return;
+    if (_seleccionados.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
+      );
+      return;
+    }
+
+    final textos = _seleccionados.map((i) {
+      final f = _funds[i];
+      return f['texto']!;
+    }).join('\n\n');
+
+    Navigator.pop(context, textos);
   }
-
-  // 👇 AQUÍ ESTÁ EL CAMBIO: Solo mandamos fund['texto'], no el título
-  final textos = _seleccionados.map((i) {
-    final f = _funds[i];
-    return f['texto']!; // Solo el párrafo, sin título
-  }).join('\n\n');
-
-  Navigator.pop(context, textos);
-  }
-
-  
 
   void _eliminarFund(int index) {
     setState(() {
       _funds.removeAt(index);
       _seleccionados.remove(index);
-      // Reajustar índices
       _seleccionados = _seleccionados.map((i) => i > index? i - 1 : i).toSet();
     });
     _guardar();
@@ -491,7 +544,7 @@ class _FundamentosPageState extends State<FundamentosPage> {
                   style: const TextStyle(color: Colors.white),
                   maxLines: 6,
                   decoration: const InputDecoration(
-                    hintText: 'TITULO EN MAYUSCULAS\nTexto del párrafo\n\nOTRO TITULO\nOtro texto...',
+                    hintText: 'CALIDAD\nimputado\n\nCALIDAD\ndetenido\n\nARTÍCULO 14\nTexto...',
                     hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                     border: InputBorder.none,
                   ),
@@ -682,7 +735,7 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
         child: _procesando
-     ? const CircularProgressIndicator(color: Colors.white)
+    ? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.camera),
       ),
     );
