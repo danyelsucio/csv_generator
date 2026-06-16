@@ -159,15 +159,16 @@ class _CsvPageState extends State<CsvPage> {
       String csv = const ListToCsvConverter().convert(_data);
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Guardar CSV',
-        fileName: '$nombreElegido.csv',
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-        bytes: utf8.encode(csv),
+        if (outputFile!= null) {
+          _snack('Guardado: $nombreElegido.csv');
+          setState(() {
+          _data = []; // 👈 LIMPIA LA TABLA DESPUÉS DE GUARDAR
+          _selectedRow = null;
+          _selectedCol = null;
+         });
+        }
       );
 
-      if (outputFile!= null) {
-        _snack('Guardado: $nombreElegido.csv');
-      }
     } catch (e) {
       _snack('Error: $e');
     }
@@ -290,6 +291,19 @@ class _CsvPageState extends State<CsvPage> {
         backgroundColor: Colors.red[900],
         title: const Text('CSV'),
         actions: [
+          IconButton(
+  icon: const Icon(Icons.clear_all), 
+  onPressed: () {
+    setState(() {
+      _data = [];
+      _selectedRow = null;
+      _selectedCol = null;
+    });
+    _snack('Tabla limpiada');
+  }, 
+  tooltip: 'Limpiar tabla'
+),
+const SizedBox(width: 8),
           IconButton(icon: const Icon(Icons.upload_file), onPressed: _cargarCSV, tooltip: 'Subir'),
           const SizedBox(width: 8),
           IconButton(icon: const Icon(Icons.save), onPressed: _descargarCSV, tooltip: 'Guardar'),
