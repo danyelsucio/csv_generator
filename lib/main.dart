@@ -200,6 +200,7 @@ if (outputFile!= null) {
     _data = []; // 👈 LIMPIA LA TABLA DESPUÉS DE GUARDAR
     _selectedRow = null;
     _selectedCol = null;
+    _folderName = '';
   });
 }
     //findel cambio por un parentesis
@@ -335,7 +336,11 @@ if (outputFile!= null) {
             color: Colors.black54,
             borderRadius: BorderRadius.circular(4),
           ),
-          child: Text(_folderName, style: const TextStyle(fontSize: 12)),
+          child: Text(
+  _folderName.length > 20 ? '${_folderName.substring(0, 20)}...' : _folderName,
+  style: const TextStyle(fontSize: 12),
+  overflow: TextOverflow.ellipsis,
+),
         ),
       ],
     ],
