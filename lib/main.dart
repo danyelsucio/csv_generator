@@ -207,29 +207,43 @@ class _OficiosPageState extends State<OficiosPage> {
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.red[900]!),
-                borderRadius: BorderRadius.circular(8),
-                color: const Color(0xFF0A0A0A),
-              ),
-              padding: const EdgeInsets.all(12),
-              width: double.infinity,
-              height: double.infinity,
-              child: SingleChildScrollView(
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _controller,
-                  builder: (context, value, child) {
-                    return SelectableText.rich(
-                      TextSpan(children: _buildTextSpans(value.text)),
-                    );
-                  },
-                ),
-              ),
-            ),
+  padding: const EdgeInsets.all(12),
+  child: Container(
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.red[900]!),
+      borderRadius: BorderRadius.circular(8),
+      color: const Color(0xFF0A0A0A),
+    ),
+    child: Stack(
+      children: [
+        // 👇 1. CAPA DE ABAJO: Texto pintado que SÍ scrollea
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, child) {
+              return SelectableText.rich(
+                TextSpan(children: _buildTextSpans(value.text + '\n')), // 👈 \n extra pa que scrollee
+              );
+            },
+          ),
+        ),
+        // 👇 2. CAPA DE ARRIBA: TextField invisible que TAMBIÉN scrollea
+        TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
+          cursorColor: Colors.red,
+          maxLines: null,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.all(12),
+          ),
+        ),
+      ],
+    ),
+  ),
+),
             TextField(
               controller: _controller,
               focusNode: _focusNode,
