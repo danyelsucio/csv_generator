@@ -75,11 +75,17 @@ class _CsvPageState extends State<CsvPage> {
   }
 
   Future<void> _cargarCSV() async {
+  // 1. PEDIR PERMISO ANTES DE TODO
+  var status = await Permission.manageExternalStorage.request();
+  
+  if (status.isGranted) {
+    // 2. SI TE DIERON PERMISO, ABRE EL FILE PICKER
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
-    if (result!= null) {
+    
+    if (result != null) {
       final file = File(result.files.single.path!);
       final input = await file.readAsString();
       List<List<dynamic>> csvTable = const CsvToListConverter(
@@ -97,7 +103,13 @@ class _CsvPageState extends State<CsvPage> {
         _selectedRow = null;
         _selectedCol = null;
       });
+      _snack('CSV cargado con éxito');
     }
+  } else {
+    // 4. SI NO TE DIERON PERMISO, MÁNDALO A AJUSTES
+    openAppSettings();
+    _snack('Permiso denegado. Actívalo en Ajustes');
+  }
   }
 
   Future<void> _descargarCSV() async {
