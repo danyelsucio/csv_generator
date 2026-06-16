@@ -248,7 +248,7 @@ void _aplicarResaltado() {
     const SizedBox(width: 8),
   ],
 ),
-      body: Padding(
+    body: Padding(
   padding: const EdgeInsets.all(12),
   child: Container(
     decoration: BoxDecoration(
@@ -258,19 +258,17 @@ void _aplicarResaltado() {
     ),
     child: Stack(
       children: [
-        // 👇 1. CAPA DE ABAJO: Texto pintado que SÍ scrollea
         SingleChildScrollView(
           padding: const EdgeInsets.all(12),
           child: ValueListenableBuilder<TextEditingValue>(
             valueListenable: _controller,
             builder: (context, value, child) {
               return SelectableText.rich(
-                TextSpan(children: _buildTextSpans(value.text + '\n')), // 👈 \n extra pa que scrollee
+                TextSpan(children: _buildTextSpans(value.text + '\n')),
               );
             },
           ),
         ),
-        // 👇 2. CAPA DE ARRIBA: TextField invisible que TAMBIÉN scrollea
         TextField(
           controller: _controller,
           focusNode: _focusNode,
@@ -282,28 +280,10 @@ void _aplicarResaltado() {
             contentPadding: EdgeInsets.all(12),
           ),
         ),
-      ],
-    ),
-  ),
-),
-            TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
-              cursorColor: Colors.red,
-              maxLines: null,
-              expands: true,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(12),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+      ], // 👈 Este ] estaba mal cerrado
+    ), // 👈 Este ) del Container
+  ), // 👈 Este ) del Padding
+), // 👈 Este ) del body
 
 class FundamentosDialog extends StatefulWidget {
   final List<String> fundamentos;
