@@ -183,4 +183,393 @@ class _OficiosPageState extends State<OficiosPage> {
       }
       spans.add(TextSpan(
         text: match.group(0),
-        style: const Text
+        style: const TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold, height: 1.5),
+      ));
+      lastMatchEnd = match.end;
+    }
+
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd),
+        style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+      ));
+    }
+
+    if (spans.isEmpty) {
+      spans.add(const TextSpan(
+        text: 'Pega tu texto aquí...',
+        style: TextStyle(color: Colors.white38, fontSize: 16, height: 1.5),
+      ));
+    }
+
+    return spans;
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text('OFICIOS'),
+        actions: [
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, child) {
+              if (!_tieneCampos()) return const SizedBox.shrink();
+              return IconButton(
+                icon: Icon(
+                  _resaltarCampos? Icons.change_circle : Icons.change_circle_outlined,
+                  color: _resaltarCampos? Colors.yellow : Colors.white,
+                ),
+                onPressed: _aplicarResaltado,
+                tooltip: 'Resaltar campos',
+              );
+            },
+          ),
+          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
+          IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
+          IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
+          IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTodo, tooltip: 'Copiar'),
+          IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Container(
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.red[900]!),
+          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFF0A0A0A),
+        ),
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(12),
+          child: Stack(
+            children: [
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, child) {
+                  return SelectableText.rich(
+                    TextSpan(children: _buildTextSpans(value.text)),
+                  );
+                },
+              ),
+              TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                scrollController: _scrollController,
+                style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
+                cursorColor: Colors.red,
+                maxLines: null,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FundamentosDialog extends StatefulWidget {
+  final List<String> fundamentos;
+  final Function(List<String>) onGuardar;
+  final Function(List<String>) onPegar;
+
+  const FundamentosDialog({
+    required this.fundamentos,
+    required this.onGuardar,
+    required this.onPegar,
+    super.key,
+  });
+
+  @override
+  State<FundamentosDialog> createState() => _FundamentosDialogState();
+}
+
+class _FundamentosDialogState extends State<FundamentosDialog> {
+  late List<String> _funds;
+  late List<bool> _seleccionados;
+  final textoCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _funds = List.from(widget.fundamentos);
+    _seleccionados = List.generate(_funds.length, (index) => false);
+  }
+
+  void _agregarFund() {
+    if (textoCtrl.text.isEmpty) return;
+    setState(() {
+      _funds.add(textoCtrl.text);
+      _seleccionados.add(false);
+      textoCtrl.clear();
+    });
+    widget.onGuardar(_funds);
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  void _pegarSeleccionados() {
+    List<String> textos = [];
+    for (int i = 0; i < _funds.length; i++) {
+      if (_seleccionados[i]) {
+        textos.add(_funds[i]);
+      }
+    }
+    if (textos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
+      );
+      return;
+    }
+    widget.onPegar(textos);
+  }
+
+  @override
+  void dispose() {
+    textoCtrl.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: const Text('Párrafos', style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: textoCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Párrafo',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  hintText: 'Escribe tu fundamento aquí...',
+                  hintStyle: TextStyle(color: Colors.white38),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+                onPressed: _agregarFund,
+                child: const Text('AGREGAR PÁRRAFO'),
+              ),
+              const Divider(color: Colors.white24),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _funds.length,
+                itemBuilder: (context, i) {
+                  return CheckboxListTile(
+                    title: Text(
+                      _funds[i],
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    value: _seleccionados[i],
+                    activeColor: Colors.red[900],
+                    onChanged: (bool? value) {
+                      setState(() {
+                        _seleccionados[i] = value!;
+                      });
+                    },
+                    secondary: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          _funds.removeAt(i);
+                          _seleccionados.removeAt(i);
+                        });
+                        widget.onGuardar(_funds);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[900]),
+          onPressed: _pegarSeleccionados,
+          child: const Text('PEGAR SELECCIONADOS'),
+        ),
+      ],
+    );
+  }
+}
+
+class CameraScreen extends StatefulWidget {
+  final String textoAnterior;
+  const CameraScreen({super.key, required this.textoAnterior});
+
+  @override
+  _CameraScreenState createState() => _CameraScreenState();
+}
+
+class _CameraScreenState extends State<CameraScreen> {
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
+  final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  bool _procesando = false;
+  String _textoCompleto = '';
+  final TextEditingController _textoController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CameraController(cameras[0], ResolutionPreset.high);
+    _initializeControllerFuture = _controller.initialize();
+    _textoController.text = widget.textoAnterior;
+    _textoCompleto = widget.textoAnterior;
+  }
+
+  Future<void> _escanearTexto() async {
+    try {
+      setState(() => _procesando = true);
+      await _initializeControllerFuture;
+      final image = await _controller.takePicture();
+      final inputImage = InputImage.fromFilePath(image.path);
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      setState(() {
+        _textoCompleto = recognizedText.text;
+        _textoController.text = recognizedText.text;
+        _procesando = false;
+      });
+    } catch (e) {
+      setState(() => _procesando = false);
+    }
+  }
+
+  void _pegarSeleccionYCerrar() {
+    final seleccion = _textoController.selection;
+    String textoAPegar = '';
+
+    if (seleccion.isValid &&!seleccion.isCollapsed) {
+      textoAPegar = seleccion.textInside(_textoController.text);
+    }
+
+    Navigator.pop(context, {
+      'completo': _textoCompleto,
+      'seleccion': textoAPegar,
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    textRecognizer.close();
+    _textoController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text('Escanear y seleccionar'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _pegarSeleccionYCerrar,
+            tooltip: 'Pegar selección',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 2,
+            child: FutureBuilder<void>(
+              future: _initializeControllerFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return CameraPreview(_controller);
+                } else {
+                  return const Center(child: CircularProgressIndicator());
+                }
+              },
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Container(
+              color: Colors.grey[900],
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  const Text(
+                    'Selecciona texto con el dedo y pica +',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _textoController,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Toma foto para escanear texto...',
+                        hintStyle: TextStyle(color: Colors.white38),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.red[900],
+        onPressed: _procesando? null : _escanearTexto,
+        child: _procesando
+           ? const CircularProgressIndicator(color: Colors.white)
+            : const Icon(Icons.camera),
+      ),
+    );
+  }
+}
