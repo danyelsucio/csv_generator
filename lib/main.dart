@@ -95,7 +95,7 @@ class ResaltadorController extends TextEditingController {
 }
 
 class _OficiosPageState extends State<OficiosPage> {
-  List<String> _fundamentos = [];
+  List<Map<String, String>> _fundamentos = [];
   String _textoEscaneadoCompleto = '';
   late ResaltadorController _controller;
   final FocusNode _focusNode = FocusNode();
@@ -113,74 +113,71 @@ class _OficiosPageState extends State<OficiosPage> {
 
   Future<void> _cargarFundamentos() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? fundString = prefs.getString('fundamentos');
+    final String? fundString = prefs.getString('fundamentos_v2');
     if (fundString!= null) {
       setState(() {
-        _fundamentos = List<String>.from(json.decode(fundString));
+        _fundamentos = List<Map<String, String>>.from(
+          json.decode(fundString).map((e) => Map<String, String>.from(e))
+        );
       });
     }
   }
 
   Future<void> _guardarFundamentos() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fundamentos', json.encode(_fundamentos));
+    await prefs.setString('fundamentos_v2', json.encode(_fundamentos));
   }
 
   void _pegarFecha() async {
-  DateTime? picked = await showDatePicker(
-    context: context,
-    initialDate: DateTime.now(),
-    firstDate: DateTime(2000),
-    lastDate: DateTime(2100),
-    builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
-  );
-  if (picked!= null) {
-    String fecha = _formatearFechaLarga(picked);
-    _insertarTexto(fecha);
-  }
-}
-
-// 👇 PEGA ESTA FUNCIÓN NUEVA DEBAJO DE _pegarFecha()
-String _formatearFechaLarga(DateTime fecha) {
-  final dia = fecha.day;
-  final mes = fecha.month;
-
-  final diasEnLetra = [
-    '', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
-    'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
-    'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve', 'treinta',
-    'treinta y uno'
-  ];
-
-  final mesesEnLetra = [
-    '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-  ];
-
-  final diaDosDigitos = dia.toString().padLeft(2, '0');
-  final diaLetra = diasEnLetra[dia];
-  final mesLetra = mesesEnLetra[mes];
-
-  return '$diaDosDigitos $diaLetra de $mesLetra';
-}
-
-  void _gestionarFundamentos() async {
-    await showDialog(
+    DateTime? picked = await showDatePicker(
       context: context,
-      builder: (context) => FundamentosDialog(
-        fundamentos: _fundamentos,
-        onGuardar: (nuevas) {
-          setState(() {
-            _fundamentos = nuevas;
-          });
-          _guardarFundamentos();
-        },
-        onPegar: (textos) {
-          _insertarTexto(textos.join('\n'));
-          Navigator.pop(context);
-        },
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
+    );
+    if (picked!= null) {
+      String fecha = _formatearFechaLarga(picked);
+      _insertarTexto(fecha);
+    }
+  }
+
+  String _formatearFechaLarga(DateTime fecha) {
+    final dia = fecha.day;
+    final mes = fecha.month;
+
+    final diasEnLetra = [
+      '', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+      'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
+      'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve', 'treinta',
+      'treinta y uno'
+    ];
+
+    final mesesEnLetra = [
+      '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+
+    final diaDosDigitos = dia.toString().padLeft(2, '0');
+    final diaLetra = diasEnLetra[dia];
+    final mesLetra = mesesEnLetra[mes];
+
+    return '$diaDosDigitos $diaLetra de $mesLetra';
+  }
+
+  void _abrirPaginaFundamentos() async {
+    final textoParaInsertar = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FundamentosPage(fundamentos: _fundamentos),
       ),
     );
+
+    if (textoParaInsertar!= null && textoParaInsertar.isNotEmpty) {
+      _insertarTexto(textoParaInsertar);
+      _snack('Fundamentos agregados');
+    }
+    _cargarFundamentos();
   }
 
   void _abrirCamaraOCR() async {
@@ -226,7 +223,6 @@ String _formatearFechaLarga(DateTime fecha) {
     final campo = _buscarCampoEnPosicion(cursorPos);
 
     if (campo!= null) {
-      // Reemplazar todo el {{CAMPO}} si el cursor está dentro
       final int inicio = campo['inicio']!;
       final int fin = campo['fin']!;
       final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
@@ -237,9 +233,8 @@ String _formatearFechaLarga(DateTime fecha) {
         _actualizarController(nuevoTexto, inicio + texto.length);
       });
     } else {
-      // Insertar normal
       final String nuevoTexto = cursorPos >= 0
-      ? textoActual.replaceRange(cursorPos, cursorPos, texto)
+   ? textoActual.replaceRange(cursorPos, cursorPos, texto)
         : textoActual + texto;
       final int nuevaPos = cursorPos >= 0? cursorPos + texto.length : nuevoTexto.length;
 
@@ -328,7 +323,7 @@ String _formatearFechaLarga(DateTime fecha) {
             },
           ),
           IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
-          IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
+          IconButton(icon: const Icon(Icons.menu_book), onPressed: _abrirPaginaFundamentos, tooltip: 'Fundamentos'),
           IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
           IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTodo, tooltip: 'Copiar'),
           IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
@@ -363,151 +358,193 @@ String _formatearFechaLarga(DateTime fecha) {
   }
 }
 
-class FundamentosDialog extends StatefulWidget {
-  final List<String> fundamentos;
-  final Function(List<String>) onGuardar;
-  final Function(List<String>) onPegar;
-
-  const FundamentosDialog({
-    required this.fundamentos,
-    required this.onGuardar,
-    required this.onPegar,
-    super.key,
-  });
+// 👇 PÁGINA NUEVA DE FUNDAMENTOS CON SELECCIÓN AZUL
+class FundamentosPage extends StatefulWidget {
+  final List<Map<String, String>> fundamentos;
+  const FundamentosPage({required this.fundamentos, super.key});
 
   @override
-  State<FundamentosDialog> createState() => _FundamentosDialogState();
+  State<FundamentosPage> createState() => _FundamentosPageState();
 }
 
-class _FundamentosDialogState extends State<FundamentosDialog> {
-  late List<String> _funds;
-  late List<bool> _seleccionados;
-  final textoCtrl = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+class _FundamentosPageState extends State<FundamentosPage> {
+  final TextEditingController _inputCtrl = TextEditingController();
+  late List<Map<String, String>> _funds;
+  Set<int> _seleccionados = {}; // 👈 Guarda índices de párrafos azules
 
   @override
   void initState() {
     super.initState();
     _funds = List.from(widget.fundamentos);
-    _seleccionados = List.generate(_funds.length, (index) => false);
   }
 
-  void _agregarFund() {
-    if (textoCtrl.text.isEmpty) return;
+  Future<void> _guardar() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fundamentos_v2', json.encode(_funds));
+  }
+
+  void _procesarTextoPegado() {
+    if (_inputCtrl.text.trim().isEmpty) return;
+
+    final bloques = _inputCtrl.text.split(RegExp(r'\n\s*\n'));
+
     setState(() {
-      _funds.add(textoCtrl.text);
-      _seleccionados.add(false);
-      textoCtrl.clear();
+      for (var bloque in bloques) {
+        final lineas = bloque.trim().split('\n');
+        if (lineas.isNotEmpty) {
+          final titulo = lineas[0].trim();
+          final texto = lineas.length > 1? lineas.sublist(1).join('\n').trim() : '';
+          if (titulo.isNotEmpty) {
+            _funds.add({'titulo': titulo, 'texto': texto});
+          }
+        }
+      }
+      _inputCtrl.clear();
     });
-    widget.onGuardar(_funds);
+    _guardar();
+  }
 
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+  void _toggleSeleccion(int index) {
+    setState(() {
+      if (_seleccionados.contains(index)) {
+        _seleccionados.remove(index);
+      } else {
+        _seleccionados.add(index);
+      }
     });
   }
 
-  void _pegarSeleccionados() {
-    List<String> textos = [];
-    for (int i = 0; i < _funds.length; i++) {
-      if (_seleccionados[i]) {
-        textos.add(_funds[i]);
-      }
-    }
-    if (textos.isEmpty) {
+  void _limpiarSeleccion() {
+    setState(() {
+      _seleccionados.clear();
+    });
+  }
+
+  void _insertarSeleccionados() {
+    if (_seleccionados.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
       );
       return;
     }
-    widget.onPegar(textos);
+
+    final textos = _seleccionados.map((i) {
+      final f = _funds[i];
+      return '${f['titulo']}\n${f['texto']}';
+    }).join('\n\n');
+
+    Navigator.pop(context, textos);
+  }
+
+  void _eliminarFund(int index) {
+    setState(() {
+      _funds.removeAt(index);
+      _seleccionados.remove(index);
+      // Reajustar índices
+      _seleccionados = _seleccionados.map((i) => i > index? i - 1 : i).toSet();
+    });
+    _guardar();
   }
 
   @override
   void dispose() {
-    textoCtrl.dispose();
-    _scrollController.dispose();
+    _inputCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.grey[900],
-      title: const Text('Párrafos', style: TextStyle(color: Colors.white)),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 400,
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: textoCtrl,
-                style: const TextStyle(color: Colors.white),
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Párrafo',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  hintText: 'Escribe tu fundamento aquí...',
-                  hintStyle: TextStyle(color: Colors.white38),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
-                onPressed: _agregarFund,
-                child: const Text('AGREGAR PÁRRAFO'),
-              ),
-              const Divider(color: Colors.white24),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _funds.length,
-                itemBuilder: (context, i) {
-                  return CheckboxListTile(
-                    title: Text(
-                      _funds[i],
-                      style: const TextStyle(color: Colors.white),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    value: _seleccionados[i],
-                    activeColor: Colors.red[900],
-                    onChanged: (bool? value) {
-                      setState(() {
-                        _seleccionados[i] = value!;
-                      });
-                    },
-                    secondary: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        setState(() {
-                          _funds.removeAt(i);
-                          _seleccionados.removeAt(i);
-                        });
-                        widget.onGuardar(_funds);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text('FUNDAMENTOS'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cleaning_services),
+            onPressed: _limpiarSeleccion,
+            tooltip: 'Quitar selección',
           ),
-        ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _insertarSeleccionados,
+            tooltip: 'Insertar seleccionados',
+          ),
+        ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR')),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[900]),
-          onPressed: _pegarSeleccionados,
-          child: const Text('PEGAR SELECCIONADOS'),
-        ),
-      ],
+      body: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.red[900]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _inputCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    hintText: 'TITULO EN MAYUSCULAS\nTexto del párrafo\n\nOTRO TITULO\nOtro texto...',
+                    hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                    border: InputBorder.none,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+                  onPressed: _procesarTextoPegado,
+                  child: const Text('GUARDAR FUNDAMENTOS'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _funds.length,
+              itemBuilder: (context, i) {
+                final fund = _funds[i];
+                final estaSeleccionado = _seleccionados.contains(i);
+                return GestureDetector(
+                  onTap: () => _toggleSeleccion(i),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: estaSeleccionado? Colors.blue[900]!.withOpacity(0.3) : Colors.grey[900],
+                      border: Border.all(
+                        color: estaSeleccionado? Colors.blue : Colors.transparent,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListTile(
+                      title: Text(
+                        fund['titulo']!,
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        fund['texto']!,
+                        style: TextStyle(
+                          color: estaSeleccionado? Colors.blue[200] : Colors.white70,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _eliminarFund(i),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -642,7 +679,7 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
         child: _procesando
-         ? const CircularProgressIndicator(color: Colors.white)
+     ? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.camera),
       ),
     );
