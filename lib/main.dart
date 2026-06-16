@@ -126,8 +126,8 @@ class _OficiosPageState extends State<OficiosPage> {
     final nombreCampo = campo['contenido'].toUpperCase();
 
     final opciones = _fundamentos
-  .where((f) => f['titulo']!.toUpperCase() == nombreCampo)
-  .toList();
+.where((f) => f['titulo']!.toUpperCase() == nombreCampo)
+.toList();
 
     if (opciones.isNotEmpty) {
       _mostrarMenuFlotante(nombreCampo, opciones, campo);
@@ -262,6 +262,22 @@ class _OficiosPageState extends State<OficiosPage> {
     );
     if (picked!= null) {
       String fecha = _formatearFechaLarga(picked);
+
+      // AUTO-GUARDA FECHA EN LIBRITO
+      bool yaExiste = _fundamentos.any((f) =>
+        f['titulo']!.toUpperCase() == 'FECHA' && f['texto']!.trim() == fecha.trim()
+      );
+
+      if (!yaExiste) {
+        setState(() {
+          _fundamentos.add({
+            'titulo': 'FECHA',
+            'texto': fecha.trim(),
+          });
+        });
+        _guardarFundamentos();
+      }
+
       _insertarTexto(fecha);
     }
   }
@@ -342,6 +358,24 @@ class _OficiosPageState extends State<OficiosPage> {
       final int inicio = campo['inicio']!;
       final int fin = campo['fin']!;
       final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
+      final String nombreCampo = campo['contenido'].toUpperCase().trim();
+
+      // AUTO-GUARDA SOLO NOMBRE Y FECHA
+      if ((nombreCampo == 'NOMBRE' || nombreCampo == 'FECHA') && texto.trim().isNotEmpty) {
+        bool yaExiste = _fundamentos.any((f) =>
+          f['titulo']!.toUpperCase() == nombreCampo && f['texto']!.trim() == texto.trim()
+        );
+
+        if (!yaExiste) {
+          setState(() {
+            _fundamentos.add({
+              'titulo': nombreCampo,
+              'texto': texto.trim(),
+            });
+          });
+          _guardarFundamentos();
+        }
+      }
 
       setState(() {
         _camposVerdes.removeWhere((r) => r['inicio']! >= inicio && r['fin']! <= fin);
@@ -557,13 +591,68 @@ class _FundamentosPageState extends State<FundamentosPage> {
     Navigator.pop(context, textos);
   }
 
-  void _eliminarFund(int index) {
-    setState(() {
-      _funds.removeAt(index);
-      _seleccionados.remove(index);
-      _seleccionados = _seleccionados.map((i) => i > index? i - 1 : i).toSet();
-    });
-    _guardar();
+  void _editarFund(int index) async {
+    final fund = _funds[index];
+    final tituloCtrl = TextEditingController(text: fund['titulo']);
+    final textoCtrl = TextEditingController(text: fund['texto']);
+
+    final resultado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Editar', style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: tituloCtrl,
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                decoration: const InputDecoration(
+                  labelText: 'TÍTULO',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textoCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  labelText: 'Texto',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Guardar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (resultado == true) {
+      setState(() {
+        _funds[index] = {
+          'titulo': tituloCtrl.text.trim(),
+          'texto': textoCtrl.text.trim(),
+        };
+      });
+      _guardar();
+    }
+
+    tituloCtrl.dispose();
+    textoCtrl.dispose();
   }
 
   @override
@@ -654,8 +743,8 @@ class _FundamentosPageState extends State<FundamentosPage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _eliminarFund(i),
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        onPressed: () => _editarFund(i),
                       ),
                     ),
                   ),
@@ -778,6 +867,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   Expanded(
                     child: TextField(
                       controller: _textoController,
+                      readOnly: true,
                       style: const TextStyle(color: Colors.white),
                       maxLines: null,
                       expands: true,
@@ -799,7 +889,7 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
         child: _procesando
- ? const CircularProgressIndicator(color: Colors.white)
+? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.camera),
       ),
     );
