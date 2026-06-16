@@ -84,8 +84,22 @@ class _CsvPageState extends State<CsvPage> {
     );
 
     if (result!= null) {
-      String content = utf8.decode(result.files.first.bytes!, allowMalformed: true);
+      final bytes = result.files.first.bytes!;
+      String content;
 
+      // 👇 MAGIA: Auto-detecta UTF-8 vs Windows-1252 pa que jale en cel y tablet
+      try {
+        content = utf8.decode(bytes);
+        // Si decodifica pero salen Ã,Â, es porque era Latin1 mal leído
+        if (content.contains('Ã') || content.contains('Â') || content.contains('â')) {
+          throw const FormatException('Probablemente Latin1');
+        }
+      } catch (e) {
+        // Fallback a Windows-1252 / Latin1 pa CSVs de Excel
+        content = latin1.decode(bytes);
+      }
+
+      // Quitar BOM si existe
       if (content.startsWith('\uFEFF')) {
         content = content.substring(1);
       }
@@ -104,24 +118,38 @@ class _CsvPageState extends State<CsvPage> {
         return;
       }
 
-      // 👈 PEGA ESTO: SACAR NOMBRE DE CARPETA/ARCHIVO
-      // 👈 REEMPLAZA TODO ESTE BLOQUE
+      // 👇 Normalizar headers pa quitar acentos y evitar rombitos
+      if (fields.isNotEmpty) {
+        for (int i = 0; i < fields[0].length; i++) {
+          String header = fields[0][i].toString().toUpperCase();
+          header = header
+             .replaceAll('Á', 'A')
+             .replaceAll('É', 'E')
+             .replaceAll('Í', 'I')
+             .replaceAll('Ó', 'O')
+             .replaceAll('Ú', 'U')
+             .replaceAll('Ñ', 'N')
+             .replaceAll('Ä', 'A')
+             .replaceAll('Ë', 'E')
+             .replaceAll('Ï', 'I')
+             .replaceAll('Ö', 'O')
+             .replaceAll('Ü', 'U');
+          fields[0][i] = header;
+        }
+      }
 
+      String nombreArchivo = result.files.first.name.replaceAll('.csv', '');
 
-// 👈 POR ESTE:
-String nombreArchivo = result.files.first.name.replaceAll('.csv', '');
-String nombreCarpeta = nombreArchivo; // Usa directo el nombre del archivo
-
-setState(() {
-  _data = fields;
-  _selectedRow = null;
-  _selectedCol = null;
-  _folderName = nombreCarpeta; // 👈 AHORA SÍ SALE EL NOMBRE REAL
-});
+      setState(() {
+        _data = fields;
+        _selectedRow = null;
+        _selectedCol = null;
+        _folderName = nombreArchivo;
+      });
       _snack('CSV cargado: $nombreArchivo - ${fields.length - 1} filas');
     }
   } catch (e) {
-    _snack('Error al cargar: $e');
+    _snack('Error al cargar CSV: $e');
   }
   }
 //aqui termina cargar csv 
