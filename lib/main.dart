@@ -87,9 +87,10 @@ class _CsvPageState extends State<CsvPage> {
     if (result!= null) {
       final bytes = result.files.first.bytes!;
 
-      // 👇 FUÉRZALO A UTF-8 - Sin try/catch, sin Latin1
+      // 👇 1. LEE COMO UTF-8 A HUEVO
       String content = utf8.decode(bytes, allowMalformed: true);
 
+      // 👇 2. QUITA BOM SI TRAE
       if (content.startsWith('\uFEFF')) {
         content = content.substring(1);
       }
@@ -97,6 +98,22 @@ class _CsvPageState extends State<CsvPage> {
       List<List<dynamic>> fields = const CsvToListConverter(
         shouldParseNumbers: false,
       ).convert(content);
+
+      // 👇 3. ARREGLA EL MOJIBAKE - ESTA ES LA CLAVE
+      for (int r = 0; r < fields.length; r++) {
+        for (int c = 0; c < fields[r].length; c++) {
+          String celda = fields[r][c].toString();
+          // Si detecta Ã, repara la codificación doble
+          if (celda.contains('Ã')) {
+            try {
+              celda = utf8.decode(latin1.encode(celda));
+            } catch (e) {
+              // Si truena, lo deja como está
+            }
+          }
+          fields[r][c] = celda;
+        }
+      }
 
       setState(() {
         _data = fields;
