@@ -139,82 +139,78 @@ class _CsvPageState extends State<CsvPage> {
   }
 //aqui termina cargar csv 
   Future<void> _descargarCSV() async {
-    if (_data.isEmpty) {
-      _snack('No hay datos para guardar');
-      return;
-    }
+  if (_data.isEmpty) {
+    _snack('No hay datos para guardar');
+    return;
+  }
 
-    if (Platform.isAndroid) {
-      var status = await Permission.manageExternalStorage.request();
+  if (Platform.isAndroid) {
+    var status = await Permission.manageExternalStorage.request();
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
       if (!status.isGranted) {
-        status = await Permission.storage.request();
-        if (!status.isGranted) {
-          _snack('Permiso denegado. Actívalo en Ajustes');
-          openAppSettings();
-          return;
-        }
+        _snack('Permiso denegado. Actívalo en Ajustes');
+        openAppSettings();
+        return;
       }
     }
+  }
 
-    String nombre = 'Pendientes_${DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now())}';
-    final controller = TextEditingController(text: nombre);
+  String nombre = 'Pendientes_${DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now())}';
+  final controller = TextEditingController(text: nombre);
 
-    final nombreElegido = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('Guardar como', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            suffixText: '.csv',
-            labelStyle: TextStyle(color: Colors.white70),
-          ),
+  final nombreElegido = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: const Text('Guardar como', style: TextStyle(color: Colors.white)),
+      content: TextField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white),
+        decoration: const InputDecoration(
+          suffixText: '.csv',
+          labelStyle: TextStyle(color: Colors.white70),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR')),
-          TextButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('GUARDAR')),
-        ],
       ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR')),
+        TextButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('GUARDAR')),
+      ],
+    ),
+  );
+
+  if (nombreElegido == null || nombreElegido.isEmpty) return;
+
+  try {
+    List<List<dynamic>> dataLimpia = _data.where((fila) => 
+      fila.any((celda) => celda != null && celda.toString() != '')
+    ).toList();
+
+    String csv = const ListToCsvConverter(eol: '\r\n').convert(dataLimpia);
+
+    // 👇 AQUÍ ESTÁ EL PARCHE - UTF8 CON BOM
+    final csvBytes = [0xEF, 0xBB, 0xBF, ...utf8.encode(csv)];
+
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Guardar CSV',
+      fileName: '$nombreElegido.csv',
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      bytes: csvBytes, // 👈 CAMBIAS utf8.encode(csv) POR csvBytes
     );
 
-    if (nombreElegido == null || nombreElegido.isEmpty) return;
-
-    try {
-      //nuevo parche
-      // 👈 PEGA ESTO ANTES DE String csv = const ListToCsvConverter()...
-List<List<dynamic>> dataLimpia = _data.where((fila) => 
-  fila.any((celda) => celda != null && celda.toString() != '')
-).toList();
-
-String csv = const ListToCsvConverter(
-  eol: '\r\n'
-).convert(dataLimpia); // 👈 USA dataLimpia
-      //fin de parche
-      
-      //cambio por un perentesis
-      String? outputFile = await FilePicker.platform.saveFile(
-  dialogTitle: 'Guardar CSV',
-  fileName: '$nombreElegido.csv',
-  type: FileType.custom,
-  allowedExtensions: ['csv'],
-  bytes: utf8.encode(csv),
-); // 👈 ESTE PARÉNTESIS CIERRA EL saveFile
-
-if (outputFile!= null) {
-  _snack('Guardado: $nombreElegido.csv');
-  setState(() {
-    _data = []; // 👈 LIMPIA LA TABLA DESPUÉS DE GUARDAR
-    _selectedRow = null;
-    _selectedCol = null;
-    _folderName = '';
-  });
-}
-    //findel cambio por un parentesis
-    } catch (e) {
-      _snack('Error: $e');
+    if (outputFile!= null) {
+      _snack('Guardado: $nombreElegido.csv');
+      setState(() {
+        _data = [];
+        _selectedRow = null;
+        _selectedCol = null;
+        _folderName = '';
+      });
     }
+  } catch (e) {
+    _snack('Error: $e');
+  }
   }
 
   void _pegarManual() async {
