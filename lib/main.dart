@@ -105,24 +105,19 @@ class _CsvPageState extends State<CsvPage> {
       }
 
       // 👈 PEGA ESTO: SACAR NOMBRE DE CARPETA/ARCHIVO
-      String nombreArchivo = result.files.first.name;
-      String? path = result.files.first.path;
-      String nombreCarpeta = '';
+      // 👈 REEMPLAZA TODO ESTE BLOQUE
 
-      if (path!= null) {
-        // Saca la carpeta padre del path
-        nombreCarpeta = path.split(Platform.pathSeparator).reversed.skip(1).first;
-      } else {
-        // Si no hay path, usa el nombre del archivo sin.csv
-        nombreCarpeta = nombreArchivo.replaceAll('.csv', '');
-      }
 
-      setState(() {
-        _data = fields;
-        _selectedRow = null;
-        _selectedCol = null;
-        _folderName = nombreCarpeta; // 👈 GUARDA EL NOMBRE
-      });
+// 👈 POR ESTE:
+String nombreArchivo = result.files.first.name.replaceAll('.csv', '');
+String nombreCarpeta = nombreArchivo; // Usa directo el nombre del archivo
+
+setState(() {
+  _data = fields;
+  _selectedRow = null;
+  _selectedCol = null;
+  _folderName = nombreCarpeta; // 👈 AHORA SÍ SALE EL NOMBRE REAL
+});
       _snack('CSV cargado: $nombreArchivo - ${fields.length - 1} filas');
     }
   } catch (e) {
