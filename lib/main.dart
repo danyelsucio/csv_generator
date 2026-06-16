@@ -419,7 +419,30 @@ class _OficiosPageState extends State<OficiosPage> {
     _snack('Texto copiado');
   }
 
-  void _limpiarTexto() {
+  void _limpiarTexto() async {
+  final confirmar = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: const Text('¿Borrar todo?', style: TextStyle(color: Colors.white)),
+      content: const Text(
+        'Se va a borrar todo el texto del oficio. ¿Estás seguro?',
+        style: TextStyle(color: Colors.white70),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('BORRAR', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmar == true) {
     _overlayEntry?.remove();
     _overlayEntry = null;
     setState(() {
@@ -428,6 +451,7 @@ class _OficiosPageState extends State<OficiosPage> {
       _camposVerdes.clear();
     });
     _snack('Texto limpiado');
+  }
   }
 
   bool _tieneCampos() {
@@ -773,10 +797,16 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _procesando = false;
   String _textoCompleto = '';
   final TextEditingController _textoController = TextEditingController();
+  bool _fotoTomada = false; // 👈 Para saber si ya tomó foto
 
   @override
   void initState() {
     super.initState();
+    // 👇 FUERZA HORIZONTAL
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _controller = CameraController(cameras[0], ResolutionPreset.high);
     _initializeControllerFuture = _controller.initialize();
     _textoController.text = widget.textoAnterior;
@@ -794,6 +824,7 @@ class _CameraScreenState extends State<CameraScreen> {
         _textoCompleto = recognizedText.text;
         _textoController.text = recognizedText.text;
         _procesando = false;
+        _fotoTomada = true; // 👈 Ya tomó foto
       });
     } catch (e) {
       setState(() => _procesando = false);
@@ -808,6 +839,12 @@ class _CameraScreenState extends State<CameraScreen> {
       textoAPegar = seleccion.textInside(_textoController.text);
     }
 
+    // 👇 REGRESA A VERTICAL ANTES DE SALIR
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
     Navigator.pop(context, {
       'completo': _textoCompleto,
       'seleccion': textoAPegar,
@@ -819,6 +856,11 @@ class _CameraScreenState extends State<CameraScreen> {
     _controller.dispose();
     textRecognizer.close();
     _textoController.dispose();
+    // 👇 REGRESA A VERTICAL SI SE CIERRA
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     super.dispose();
   }
 
@@ -830,68 +872,83 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         title: const Text('Escanear y seleccionar'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _pegarSeleccionYCerrar,
-            tooltip: 'Pegar selección',
-          ),
+          if (_fotoTomada)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _pegarSeleccionYCerrar,
+              tooltip: 'Pegar selección',
+            ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            flex: 2,
-            child: FutureBuilder<void>(
-              future: _initializeControllerFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.done) {
-                  return CameraPreview(_controller);
-                } else {
-                  return const Center(child: CircularProgressIndicator());
-                }
-              },
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Container(
+      body: _fotoTomada
+         ? Container( // 👈 PANTALLA COMPLETA CON TEXTO
               color: Colors.grey[900],
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
-                  const Text(
-                    'Selecciona texto con el dedo y pica +',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Selecciona texto con el dedo y pica +',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt, color: Colors.red),
+                        onPressed: () => setState(() => _fotoTomada = false),
+                        tooltip: 'Tomar otra foto',
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Expanded(
                     child: TextField(
                       controller: _textoController,
                       readOnly: true,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.white, fontSize: 18),
                       maxLines: null,
                       expands: true,
                       textAlignVertical: TextAlignVertical.top,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        hintText: 'Toma foto para escanear texto...',
+                        hintText: 'Texto escaneado...',
                         hintStyle: TextStyle(color: Colors.white38),
                       ),
                     ),
                   ),
                 ],
               ),
+            )
+          : Stack( // 👈 CÁMARA PANTALLA COMPLETA
+              children: [
+                Positioned.fill(
+                  child: FutureBuilder<void>(
+                    future: _initializeControllerFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.done) {
+                        return CameraPreview(_controller);
+                      } else {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                    },
+                  ),
+                ),
+                Positioned(
+                  bottom: 30,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: FloatingActionButton(
+                      backgroundColor: Colors.red[900],
+                      onPressed: _procesando? null : _escanearTexto,
+                      child: _procesando
+                         ? const CircularProgressIndicator(color: Colors.white)
+                          : const Icon(Icons.camera, size: 32),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.red[900],
-        onPressed: _procesando? null : _escanearTexto,
-        child: _procesando
-? const CircularProgressIndicator(color: Colors.white)
-            : const Icon(Icons.camera),
-      ),
     );
   }
 }
