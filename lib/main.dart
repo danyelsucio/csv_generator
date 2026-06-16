@@ -205,7 +205,8 @@ if (outputFile!= null) {
       return;
     }
 
-    final controller = TextEditingController(text: _data[_selectedRow!][_selectedCol!].toString());
+    //final controller = TextEditingController(text: _data[_selectedRow!][_selectedCol!].toString());
+    final controller = TextEditingController(); // 👈 VACÍO, SIN text:
     final nuevoDato = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
