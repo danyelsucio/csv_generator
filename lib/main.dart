@@ -459,21 +459,7 @@ class FundamentosDialog extends StatefulWidget {
   State<FundamentosDialog> createState() => _FundamentosDialogState();
 }
 
-class FundamentosDialog extends StatefulWidget {
-  final List<String> fundamentos;
-  final Function(List<String>) onGuardar;
-  final Function(List<String>) onPegar;
 
-  const FundamentosDialog({
-    required this.fundamentos,
-    required this.onGuardar,
-    required this.onPegar,
-    super.key,
-  });
-
-  @override
-  State<FundamentosDialog> createState() => _FundamentosDialogState();
-}
 
 class _FundamentosDialogState extends State<FundamentosDialog> {
   late List<String> _funds;
