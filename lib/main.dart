@@ -421,20 +421,23 @@ class _FundamentosPageState extends State<FundamentosPage> {
   }
 
   void _insertarSeleccionados() {
-    if (_seleccionados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
-      );
-      return;
-    }
-
-    final textos = _seleccionados.map((i) {
-      final f = _funds[i];
-      return '${f['titulo']}\n${f['texto']}';
-    }).join('\n\n');
-
-    Navigator.pop(context, textos);
+  if (_seleccionados.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
+    );
+    return;
   }
+
+  // 👇 AQUÍ ESTÁ EL CAMBIO: Solo mandamos fund['texto'], no el título
+  final textos = _seleccionados.map((i) {
+    final f = _funds[i];
+    return f['texto']!; // Solo el párrafo, sin título
+  }).join('\n\n');
+
+  Navigator.pop(context, textos);
+  }
+
+  
 
   void _eliminarFund(int index) {
     setState(() {
