@@ -348,33 +348,49 @@ if (outputFile!= null) {
   ),
    
         actions: [
-          IconButton(
-  icon: const Icon(Icons.clear_all), 
-  onPressed: () {
-    setState(() {
-      _data = [];
-      _selectedRow = null;
-      _selectedCol = null;
-      _folderName = '';
-    });
-    _snack('Tabla limpiada');
-  }, 
-  tooltip: 'Limpiar tabla'
-),
-const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.upload_file), onPressed: _cargarCSV, tooltip: 'Subir'),
-          const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.save), onPressed: _descargarCSV, tooltip: 'Guardar'),
-          const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.edit), onPressed: _pegarManual, tooltip: 'Manual'),
-          const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
-          const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
-          const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear y pegar'), // 👈 YA NO HAY BOTÓN +
-          const SizedBox(width: 12),
-        ],
+  // 👇 ESTOS SE QUEDAN COMO ICONOS NORMALES
+  IconButton(icon: const Icon(Icons.edit), onPressed: _pegarManual, tooltip: 'Manual'),
+  IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
+  IconButton(icon: const Icon(Icons.menu_book), onPressed: _gestionarFundamentos, tooltip: 'Fundamentos'),
+  IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
+  
+  // 👇 ESTE ES EL MENÚ DE 3 PUNTOS HASTA LA ORILLA DERECHA
+  PopupMenuButton(
+    icon: const Icon(Icons.more_vert),
+    offset: const Offset(0, 50), // 👈 Pa que no tape el AppBar
+    itemBuilder: (context) => [
+      PopupMenuItem(
+        child: const ListTile(leading: Icon(Icons.clear_all), title: Text('Limpiar tabla')),
+        onTap: () {
+          // 👈 Necesitas el Future.delayed pa que cierre el menú primero
+          Future.delayed(Duration.zero, () {
+            setState(() {
+              _data = [];
+              _selectedRow = null;
+              _selectedCol = null;
+              _folderName = '';
+            });
+            _snack('Tabla limpiada');
+          });
+        },
+      ),
+      PopupMenuItem(
+        child: const ListTile(leading: Icon(Icons.upload_file), title: Text('Cargar CSV')),
+        onTap: () {
+          Future.delayed(Duration.zero, () => _cargarCSV());
+        },
+      ),
+      PopupMenuItem(
+        child: const ListTile(leading: Icon(Icons.save), title: Text('Descargar CSV')),
+        onTap: () {
+          Future.delayed(Duration.zero, () => _descargarCSV());
+        },
+      ),
+    ],
+  ),
+  const SizedBox(width: 8), // 👈 Espacio pa que no pegue a la orilla
+],
+        //termina mi actions
       ),
       body: _data.isEmpty
     ? const Center(child: Text('Sube un CSV para empezar', style: TextStyle(color: Colors.white)))
