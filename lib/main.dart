@@ -86,9 +86,15 @@ class _CsvPageState extends State<CsvPage> {
 
     if (result!= null) {
       final bytes = result.files.first.bytes!;
+      String content;
 
-      // 👇 DIRECTO A LATIN1 - Excel Windows siempre usa esto
-      String content = latin1.decode(bytes);
+      // 👇 INTENTA UTF-8 PRIMERO - La mayoría de CSVs modernos vienen así
+      try {
+        content = utf8.decode(bytes);
+      } catch (e) {
+        // 👇 SI TRUENA, ENTONCES SÍ ES LATIN1 DE EXCEL VIEJO
+        content = latin1.decode(bytes);
+      }
 
       // Quitar BOM si existe
       if (content.startsWith('\uFEFF')) {
@@ -109,20 +115,8 @@ class _CsvPageState extends State<CsvPage> {
         return;
       }
 
-      // 👇 Normalizar TODO: headers y celdas, pa que no quede ni un acento raro
-      for (int r = 0; r < fields.length; r++) {
-        for (int c = 0; c < fields[r].length; c++) {
-          String celda = fields[r][c].toString();
-          celda = celda
-            .replaceAll('Ã¡', 'á').replaceAll('Ã©', 'é')
-            .replaceAll('Ã­', 'í').replaceAll('Ã³', 'ó')
-            .replaceAll('Ãº', 'ú').replaceAll('Ã±', 'ñ')
-            .replaceAll('Ã', 'Á').replaceAll('Ã‰', 'É')
-            .replaceAll('Ã', 'Í').replaceAll('Ã"', 'Ó')
-            .replaceAll('Ãš', 'Ú').replaceAll('Ã', 'Ñ');
-          fields[r][c] = celda;
-        }
-      }
+      // 👇 YA NO HAGAS REPLACE - Si se leyó bien, no lo necesita
+      // Quita todo este bloque de .replaceAll porque ya no aplica
 
       String nombreArchivo = result.files.first.name.replaceAll('.csv', '');
 
