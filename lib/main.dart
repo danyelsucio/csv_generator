@@ -113,9 +113,10 @@ class _CsvPageState extends State<CsvPage> {
 // fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
 
 // POR ESTAS 3:
-if (fields.length > 1) {
-  fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
-}
+      // Filtra filas 100% vacías, pero si todas están vacías deja al menos el header
+fields.removeWhere((fila) => 
+  fields.length > 1 && fila.every((celda) => celda.toString().trim().isEmpty)
+);
 
       setState(() {
         _data = fields;
