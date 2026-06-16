@@ -84,46 +84,42 @@ class _CsvPageState extends State<CsvPage> {
     );
 
     if (result != null) {
-      // Lee los bytes y quita BOM de UTF-8
       String content = utf8.decode(result.files.first.bytes!, allowMalformed: true);
       
-      // Quita BOM si existe: \uFEFF
+      // Quita BOM de UTF-8
       if (content.startsWith('\uFEFF')) {
         content = content.substring(1);
       }
-      
-      // Quita líneas completamente vacías
-      List<String> lineas = content.split('\n');
-      lineas.removeWhere((linea) => linea.trim().isEmpty);
-      content = lineas.join('\n');
       
       if (content.trim().isEmpty) {
         _snack('El archivo está vacío');
         return;
       }
 
-      // Usa CsvToListConverter pero con eol: \n para forzar
       List<List<dynamic>> fields = const CsvToListConverter(
         eol: '\n',
         shouldParseNumbers: false,
       ).convert(content);
       
-      // Filtra filas que estén 100% vacías
-      // REEMPLAZA ESTA LÍNEA:
-// fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
+      // 👈 FIX CLAVE: Solo borra filas donde TODAS las celdas sean "" o null
+      // SIN trim(), así respetamos espacios que Excel sí ve
+      fields = fields.where((fila) {
+        if (fila.isEmpty) return false;
+        // Se queda si al menos 1 celda tiene algo. "" cuenta como algo para Excel
+        return fila.any((celda) => celda != null && celda.toString() != '');
+      }).toList();
 
-// POR ESTAS 3:
-      // Filtra filas 100% vacías, pero si todas están vacías deja al menos el header
-fields.removeWhere((fila) => 
-  fields.length > 1 && fila.every((celda) => celda.toString().trim().isEmpty)
-);
+      if (fields.isEmpty) {
+        _snack('CSV sin filas válidas');
+        return;
+      }
 
       setState(() {
         _data = fields;
         _selectedRow = null;
         _selectedCol = null;
       });
-      _snack('CSV cargado: ${result.files.first.name}');
+      _snack('CSV cargado: ${result.files.first.name} - ${fields.length - 1} filas');
     }
   } catch (e) {
     _snack('Error al cargar: $e');
