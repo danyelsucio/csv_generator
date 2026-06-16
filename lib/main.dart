@@ -56,30 +56,7 @@ class _CsvPageState extends State<CsvPage> {
   }
 
   //nueva pegada
-  // 👇 PÉGALA AQUÍ, DESPUÉS DE LA LÍNEA 51
-Future<void> _abrirCsv() async {
-  // 1. PEDIR PERMISO ANTES DE TODO
-  var status = await Permission.manageExternalStorage.request();
   
-  if (status.isGranted) {
-    // 2. SI TE DIERON PERMISO, ABRE EL FILE PICKER
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-    );
-
-    if (result != null) {
-      // 3. AQUÍ YA TIENES EL ARCHIVO, LÉELO
-      File file = File(result.files.single.path!);
-      String contenido = await file.readAsString();
-      // Aquí va tu lógica para parsear el CSV a _data
-      print('CSV cargado: $contenido'); 
-    }
-  } else {
-    // 4. SI NO TE DIERON PERMISO, MÁNDALO A AJUSTES
-    openAppSettings();
-  }
-}
   //termina nueva pegada
 
   Future<void> _cargarFundamentos() async {
