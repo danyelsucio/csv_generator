@@ -44,7 +44,7 @@ class _CsvPageState extends State<CsvPage> {
   int? _selectedRow;
   int? _selectedCol;
   String _textoEscaneadoCompleto = ''; // 👈 GUARDA EL ÚLTIMO OCR
-  
+  String _ folderName = '';
 
   @override
   void initState() {
@@ -83,38 +83,47 @@ class _CsvPageState extends State<CsvPage> {
       withData: true,
     );
 
-    if (result != null) {
+    if (result!= null) {
       String content = utf8.decode(result.files.first.bytes!, allowMalformed: true);
-      
-      // Quita BOM de UTF-8
+
       if (content.startsWith('\uFEFF')) {
         content = content.substring(1);
       }
-      
+
       if (content.trim().isEmpty) {
         _snack('El archivo está vacío');
         return;
       }
 
       List<List<dynamic>> fields = const CsvToListConverter(
-        
         shouldParseNumbers: false,
       ).convert(content);
-      
-      // 👈 FIX CLAVE: Solo borra filas donde TODAS las celdas sean "" o null
-      // SIN trim(), así respetamos espacios que Excel sí ve
 
       if (fields.isEmpty) {
         _snack('CSV sin filas válidas');
         return;
       }
 
+      // 👈 PEGA ESTO: SACAR NOMBRE DE CARPETA/ARCHIVO
+      String nombreArchivo = result.files.first.name;
+      String? path = result.files.first.path;
+      String nombreCarpeta = '';
+
+      if (path!= null) {
+        // Saca la carpeta padre del path
+        nombreCarpeta = path.split(Platform.pathSeparator).reversed.skip(1).first;
+      } else {
+        // Si no hay path, usa el nombre del archivo sin.csv
+        nombreCarpeta = nombreArchivo.replaceAll('.csv', '');
+      }
+
       setState(() {
         _data = fields;
         _selectedRow = null;
         _selectedCol = null;
+        _folderName = nombreCarpeta; // 👈 GUARDA EL NOMBRE
       });
-      _snack('CSV cargado: ${result.files.first.name} - ${fields.length - 1} filas');
+      _snack('CSV cargado: $nombreArchivo - ${fields.length - 1} filas');
     }
   } catch (e) {
     _snack('Error al cargar: $e');
