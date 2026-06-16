@@ -325,22 +325,28 @@ if (outputFile!= null) {
       backgroundColor: Colors.black,
       appBar: AppBar(
   backgroundColor: Colors.red[900],
-  title: Row(
+    title: Row(
     children: [
       const Text('CSV'),
       if (_folderName.isNotEmpty)...[
         const SizedBox(width: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(4),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Tooltip(
+              message: _folderName,
+              child: Text(
+                _folderName,
+                style: const TextStyle(fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ),
-          child: Text(
-  _folderName.length > 20 ? '${_folderName.substring(0, 20)}...' : _folderName,
-  style: const TextStyle(fontSize: 12),
-  overflow: TextOverflow.ellipsis,
-),
         ),
       ],
     ],
