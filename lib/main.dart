@@ -97,17 +97,12 @@ class _CsvPageState extends State<CsvPage> {
       }
 
       List<List<dynamic>> fields = const CsvToListConverter(
-        eol: '\n',
+        
         shouldParseNumbers: false,
       ).convert(content);
       
       // 👈 FIX CLAVE: Solo borra filas donde TODAS las celdas sean "" o null
       // SIN trim(), así respetamos espacios que Excel sí ve
-      fields = fields.where((fila) {
-        if (fila.isEmpty) return false;
-        // Se queda si al menos 1 celda tiene algo. "" cuenta como algo para Excel
-        return fila.any((celda) => celda != null && celda.toString() != '');
-      }).toList();
 
       if (fields.isEmpty) {
         _snack('CSV sin filas válidas');
