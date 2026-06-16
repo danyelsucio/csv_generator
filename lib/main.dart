@@ -85,19 +85,9 @@ class _CsvPageState extends State<CsvPage> {
 
     if (result!= null) {
       final bytes = result.files.first.bytes!;
-      String content;
 
-      // 👇 MAGIA: Auto-detecta UTF-8 vs Windows-1252 pa que jale en cel y tablet
-      try {
-        content = utf8.decode(bytes);
-        // Si decodifica pero salen Ã,Â, es porque era Latin1 mal leído
-        if (content.contains('Ã') || content.contains('Â') || content.contains('â')) {
-          throw const FormatException('Probablemente Latin1');
-        }
-      } catch (e) {
-        // Fallback a Windows-1252 / Latin1 pa CSVs de Excel
-        content = latin1.decode(bytes);
-      }
+      // 👇 DIRECTO A LATIN1 - Excel Windows siempre usa esto
+      String content = latin1.decode(bytes);
 
       // Quitar BOM si existe
       if (content.startsWith('\uFEFF')) {
@@ -118,23 +108,18 @@ class _CsvPageState extends State<CsvPage> {
         return;
       }
 
-      // 👇 Normalizar headers pa quitar acentos y evitar rombitos
-      if (fields.isNotEmpty) {
-        for (int i = 0; i < fields[0].length; i++) {
-          String header = fields[0][i].toString().toUpperCase();
-          header = header
-             .replaceAll('Á', 'A')
-             .replaceAll('É', 'E')
-             .replaceAll('Í', 'I')
-             .replaceAll('Ó', 'O')
-             .replaceAll('Ú', 'U')
-             .replaceAll('Ñ', 'N')
-             .replaceAll('Ä', 'A')
-             .replaceAll('Ë', 'E')
-             .replaceAll('Ï', 'I')
-             .replaceAll('Ö', 'O')
-             .replaceAll('Ü', 'U');
-          fields[0][i] = header;
+      // 👇 Normalizar TODO: headers y celdas, pa que no quede ni un acento raro
+      for (int r = 0; r < fields.length; r++) {
+        for (int c = 0; c < fields[r].length; c++) {
+          String celda = fields[r][c].toString();
+          celda = celda
+            .replaceAll('Ã¡', 'á').replaceAll('Ã©', 'é')
+            .replaceAll('Ã­', 'í').replaceAll('Ã³', 'ó')
+            .replaceAll('Ãº', 'ú').replaceAll('Ã±', 'ñ')
+            .replaceAll('Ã', 'Á').replaceAll('Ã‰', 'É')
+            .replaceAll('Ã', 'Í').replaceAll('Ã"', 'Ó')
+            .replaceAll('Ãš', 'Ú').replaceAll('Ã', 'Ñ');
+          fields[r][c] = celda;
         }
       }
 
