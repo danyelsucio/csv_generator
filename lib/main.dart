@@ -319,33 +319,10 @@ if (outputFile!= null) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-  backgroundColor: Colors.red[900],
-    title: Row(
-    children: [
-      const Text('CSV'),
-      if (_folderName.isNotEmpty)...[
-        const SizedBox(width: 12),
-        Flexible(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Tooltip(
-              message: _folderName,
-              child: Text(
-                _folderName,
-                style: const TextStyle(fontSize: 12),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ],
-  ),
+        backgroundColor: Colors.red[900],
+        title: const Text('CSV'),
+      
+          
    
         actions: [
   // 👇 ESTOS SE QUEDAN COMO ICONOS NORMALES
