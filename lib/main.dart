@@ -222,55 +222,58 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   // 👇 NUEVO: Menú rápido para CALIDAD
-  void _mostrarOpcionesCalidad(String campo) async {
-    // Filtra fundamentos con título = contenido del campo
-    final opciones = _fundamentos
-       .where((f) => f['titulo']!.toUpperCase() == campo.toUpperCase())
-       .toList();
+  // 👇 REEMPLAZA _manejarLongPress por esta
+void _manejarLongPress() {
+  final int pos = _controller.selection.baseOffset;
+  if (pos < 0) return;
+  final campo = _buscarCampoEnPosicion(pos);
 
-    if (opciones.isEmpty) {
-      _snack('No hay opciones registradas para $campo');
-      return;
-    }
+  // 👇 SOLO SI EL CONTENIDO ES "CALIDAD"
+  if (campo!= null && campo['contenido'].toUpperCase() == 'CALIDAD') {
+    _mostrarOpcionesCalidad();
+  }
+}
 
-    final seleccion = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: Text('Selecciona $campo', style: const TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: opciones.length,
-            itemBuilder: (context, i) {
-              return ListTile(
-                title: Text(
-                  opciones[i]['texto']!,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                onTap: () => Navigator.pop(context, opciones[i]['texto']),
-              );
-            },
-          ),
+// 👇 REEMPLAZA _mostrarOpcionesCalidad por esta
+void _mostrarOpcionesCalidad() async {
+  // Filtra SOLO los que tengan título CALIDAD
+  final opciones = _fundamentos
+    .where((f) => f['titulo']!.toUpperCase() == 'CALIDAD')
+    .toList();
+
+  if (opciones.isEmpty) {
+    _snack('No hay opciones registradas para CALIDAD');
+    return;
+  }
+
+  final seleccion = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: const Text('Selecciona CALIDAD', style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: opciones.length,
+          itemBuilder: (context, i) {
+            return ListTile(
+              title: Text(
+                opciones[i]['texto']!,
+                style: const TextStyle(color: Colors.white),
+              ),
+              onTap: () => Navigator.pop(context, opciones[i]['texto']),
+            );
+          },
         ),
       ),
-    );
+    ),
+  );
 
-    if (seleccion!= null) {
-      _insertarTexto(seleccion);
-    }
+  if (seleccion!= null) {
+    _insertarTexto(seleccion);
   }
-
-  // 👇 NUEVO: Detecta long press en el TextField
-  void _manejarLongPress() {
-    final int pos = _controller.selection.baseOffset;
-    if (pos < 0) return;
-    final campo = _buscarCampoEnPosicion(pos);
-    if (campo!= null) {
-      _mostrarOpcionesCalidad(campo['contenido']);
-    }
-  }
+}
 
   void _insertarTexto(String texto) {
     final int cursorPos = _controller.selection.baseOffset;
