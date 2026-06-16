@@ -157,18 +157,24 @@ class _CsvPageState extends State<CsvPage> {
 
     try {
       String csv = const ListToCsvConverter().convert(_data);
+      //cambio por un perentesis
       String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Guardar CSV',
-        if (outputFile!= null) {
-          _snack('Guardado: $nombreElegido.csv');
-          setState(() {
-          _data = []; // 👈 LIMPIA LA TABLA DESPUÉS DE GUARDAR
-          _selectedRow = null;
-          _selectedCol = null;
-         });
-        }
-      );
+  dialogTitle: 'Guardar CSV',
+  fileName: '$nombreElegido.csv',
+  type: FileType.custom,
+  allowedExtensions: ['csv'],
+  bytes: utf8.encode(csv),
+); // 👈 ESTE PARÉNTESIS CIERRA EL saveFile
 
+if (outputFile!= null) {
+  _snack('Guardado: $nombreElegido.csv');
+  setState(() {
+    _data = []; // 👈 LIMPIA LA TABLA DESPUÉS DE GUARDAR
+    _selectedRow = null;
+    _selectedCol = null;
+  });
+}
+    //findel cambio por un parentesis
     } catch (e) {
       _snack('Error: $e');
     }
