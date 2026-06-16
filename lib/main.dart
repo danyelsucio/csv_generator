@@ -181,7 +181,7 @@ List<List<dynamic>> dataLimpia = _data.where((fila) =>
 
 String csv = const ListToCsvConverter().convert(dataLimpia); // 👈 USA dataLimpia
       //fin de parche
-      String csv = const ListToCsvConverter().convert(_data);
+      
       //cambio por un perentesis
       String? outputFile = await FilePicker.platform.saveFile(
   dialogTitle: 'Guardar CSV',
