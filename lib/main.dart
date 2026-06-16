@@ -168,10 +168,12 @@ class _CsvPageState extends State<CsvPage> {
       //nuevo parche
       // 👈 PEGA ESTO ANTES DE String csv = const ListToCsvConverter()...
 List<List<dynamic>> dataLimpia = _data.where((fila) => 
-  fila.any((celda) => celda.toString().trim().isNotEmpty)
+  fila.any((celda) => celda != null && celda.toString() != '')
 ).toList();
 
-String csv = const ListToCsvConverter().convert(dataLimpia); // 👈 USA dataLimpia
+String csv = const ListToCsvConverter(
+  eol: '\r\n'
+).convert(dataLimpia); // 👈 USA dataLimpia
       //fin de parche
       
       //cambio por un perentesis
