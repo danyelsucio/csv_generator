@@ -35,8 +35,9 @@ class OficiosPage extends StatefulWidget {
 
 class ResaltadorController extends TextEditingController {
   final bool resaltar;
+  final List<Map<String, int>> camposVerdes;
 
-  ResaltadorController({String? text, this.resaltar = false}) : super(text: text);
+  ResaltadorController({String? text, this.resaltar = false, this.camposVerdes = const []}) : super(text: text);
 
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
@@ -44,35 +45,49 @@ class ResaltadorController extends TextEditingController {
     final String text = this.text;
     final baseStyle = style?? const TextStyle(color: Colors.white, fontSize: 16, height: 1.5);
 
-    if (!resaltar || text.isEmpty) {
+    if (text.isEmpty) {
       return TextSpan(
-        text: text.isEmpty? 'Pega tu texto aquí...' : text,
-        style: text.isEmpty? baseStyle.copyWith(color: Colors.white38) : baseStyle,
+        text: 'Pega tu texto aquí...',
+        style: baseStyle.copyWith(color: Colors.white38),
       );
     }
 
-    final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
-    int lastMatchEnd = 0;
-
-    for (final Match match in exp.allMatches(text)) {
-      if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(
-          text: text.substring(lastMatchEnd, match.start),
-          style: baseStyle,
-        ));
+    List<bool> pintado = List.filled(text.length, false);
+    for (var rango in camposVerdes) {
+      int ini = rango['inicio']!;
+      int fin = rango['fin']!;
+      if (ini >= 0 && fin <= text.length && ini < fin) {
+        for (int i = ini; i < fin; i++) pintado[i] = true;
       }
-      spans.add(TextSpan(
-        text: match.group(0),
-        style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
-      ));
-      lastMatchEnd = match.end;
     }
 
-    if (lastMatchEnd < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastMatchEnd),
-        style: baseStyle,
-      ));
+    int i = 0;
+    while (i < text.length) {
+      if (pintado[i]) {
+        int start = i;
+        while (i < text.length && pintado[i]) i++;
+        spans.add(TextSpan(
+          text: text.substring(start, i),
+          style: baseStyle.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
+        ));
+      } else if (resaltar && i + 1 < text.length && text[i] == '{' && text[i + 1] == '{') {
+        int start = i;
+        int end = text.indexOf('}}', i);
+        if (end!= -1) {
+          end += 2;
+          spans.add(TextSpan(
+            text: text.substring(start, end),
+            style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+          ));
+          i = end;
+        } else {
+          spans.add(TextSpan(text: text[i], style: baseStyle));
+          i++;
+        }
+      } else {
+        spans.add(TextSpan(text: text[i], style: baseStyle));
+        i++;
+      }
     }
 
     return TextSpan(children: spans);
@@ -86,11 +101,12 @@ class _OficiosPageState extends State<OficiosPage> {
   final FocusNode _focusNode = FocusNode();
   bool _resaltarCampos = false;
   final ScrollController _scrollController = ScrollController();
+  List<Map<String, int>> _camposVerdes = [];
 
   @override
   void initState() {
     super.initState();
-    _controller = ResaltadorController(resaltar: _resaltarCampos);
+    _controller = ResaltadorController(resaltar: _resaltarCampos, camposVerdes: _camposVerdes);
     _cargarFundamentos();
     Future.delayed(Duration.zero, () => _focusNode.requestFocus());
   }
@@ -164,20 +180,67 @@ class _OficiosPageState extends State<OficiosPage> {
         }
       });
       if (resultado['seleccion']!.isNotEmpty) {
-        _snack('Texto pegado');
+        _snack('Campo reemplazado');
       }
     }
   }
 
+  Map<String, int>? _buscarCampoEnPosicion(int pos) {
+    final text = _controller.text;
+    final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
+    for (final match in exp.allMatches(text)) {
+      if (pos >= match.start && pos <= match.end) {
+        return {'inicio': match.start, 'fin': match.end};
+      }
+    }
+    return null;
+  }
+
   void _insertarTexto(String texto) {
     final int cursorPos = _controller.selection.baseOffset;
-    final String nuevoTexto = cursorPos >= 0
-      ? _controller.text.replaceRange(cursorPos, cursorPos, texto)
-        : _controller.text + texto;
-    _controller.value = TextEditingValue(
-      text: nuevoTexto,
-      selection: TextSelection.collapsed(offset: cursorPos + texto.length),
+    final String textoActual = _controller.text;
+    final campo = _buscarCampoEnPosicion(cursorPos);
+
+    if (campo!= null) {
+      // Reemplazar todo el {{CAMPO}} si el cursor está dentro
+      final int inicio = campo['inicio']!;
+      final int fin = campo['fin']!;
+      final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
+
+      setState(() {
+        _camposVerdes.removeWhere((r) => r['inicio']! >= inicio && r['fin']! <= fin);
+        _camposVerdes.add({'inicio': inicio, 'fin': inicio + texto.length});
+        _actualizarController(nuevoTexto, inicio + texto.length);
+      });
+    } else {
+      // Insertar normal
+      final String nuevoTexto = cursorPos >= 0
+      ? textoActual.replaceRange(cursorPos, cursorPos, texto)
+        : textoActual + texto;
+      final int nuevaPos = cursorPos >= 0? cursorPos + texto.length : nuevoTexto.length;
+
+      if (cursorPos >= 0) {
+        for (var rango in _camposVerdes) {
+          if (rango['inicio']! >= cursorPos) {
+            rango['inicio'] = rango['inicio']! + texto.length;
+            rango['fin'] = rango['fin']! + texto.length;
+          }
+        }
+      }
+      _actualizarController(nuevoTexto, nuevaPos);
+    }
+  }
+
+  void _actualizarController(String texto, int posCursor) {
+    final seleccionActual = TextSelection.collapsed(offset: posCursor);
+    _controller.dispose();
+    _controller = ResaltadorController(
+      text: texto,
+      resaltar: _resaltarCampos,
+      camposVerdes: _camposVerdes
     );
+    _controller.selection = seleccionActual;
+    setState(() {});
   }
 
   void _copiarTodo() {
@@ -189,6 +252,7 @@ class _OficiosPageState extends State<OficiosPage> {
     setState(() {
       _controller.clear();
       _resaltarCampos = false;
+      _camposVerdes.clear();
     });
     _snack('Texto limpiado');
   }
@@ -200,11 +264,7 @@ class _OficiosPageState extends State<OficiosPage> {
   void _aplicarResaltado() {
     setState(() {
       _resaltarCampos =!_resaltarCampos;
-      final textoActual = _controller.text;
-      final seleccionActual = _controller.selection;
-      _controller.dispose();
-      _controller = ResaltadorController(text: textoActual, resaltar: _resaltarCampos);
-      _controller.selection = seleccionActual;
+      _actualizarController(_controller.text, _controller.selection.baseOffset);
     });
     _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
   }
@@ -558,7 +618,7 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
         child: _procesando
-          ? const CircularProgressIndicator(color: Colors.white)
+         ? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.camera),
       ),
     );
