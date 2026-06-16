@@ -109,7 +109,13 @@ class _CsvPageState extends State<CsvPage> {
       ).convert(content);
       
       // Filtra filas que estén 100% vacías
-      fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
+      // REEMPLAZA ESTA LÍNEA:
+// fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
+
+// POR ESTAS 3:
+if (fields.length > 1) {
+  fields.removeWhere((fila) => fila.every((celda) => celda.toString().trim().isEmpty));
+}
 
       setState(() {
         _data = fields;
@@ -167,6 +173,14 @@ class _CsvPageState extends State<CsvPage> {
     if (nombreElegido == null || nombreElegido.isEmpty) return;
 
     try {
+      //nuevo parche
+      // 👈 PEGA ESTO ANTES DE String csv = const ListToCsvConverter()...
+List<List<dynamic>> dataLimpia = _data.where((fila) => 
+  fila.any((celda) => celda.toString().trim().isNotEmpty)
+).toList();
+
+String csv = const ListToCsvConverter().convert(dataLimpia); // 👈 USA dataLimpia
+      //fin de parche
       String csv = const ListToCsvConverter().convert(_data);
       //cambio por un perentesis
       String? outputFile = await FilePicker.platform.saveFile(
