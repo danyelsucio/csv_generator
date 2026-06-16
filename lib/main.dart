@@ -443,10 +443,27 @@ class FundamentosDialog extends StatefulWidget {
   State<FundamentosDialog> createState() => _FundamentosDialogState();
 }
 
+class FundamentosDialog extends StatefulWidget {
+  final List<String> fundamentos;
+  final Function(List<String>) onGuardar;
+  final Function(List<String>) onPegar;
+
+  const FundamentosDialog({
+    required this.fundamentos,
+    required this.onGuardar,
+    required this.onPegar,
+    super.key,
+  });
+
+  @override
+  State<FundamentosDialog> createState() => _FundamentosDialogState();
+}
+
 class _FundamentosDialogState extends State<FundamentosDialog> {
   late List<String> _funds;
   late List<bool> _seleccionados;
-  final textoCtrl = TextEditingController(); // 👈 YA NO HAY TITULO
+  final textoCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController(); // 👈 NUEVO
 
   @override
   void initState() {
@@ -458,18 +475,27 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
   void _agregarFund() {
     if (textoCtrl.text.isEmpty) return;
     setState(() {
-      _funds.add(textoCtrl.text); // 👈 SOLO EL PÁRRAFO
+      _funds.add(textoCtrl.text);
       _seleccionados.add(false);
       textoCtrl.clear();
     });
     widget.onGuardar(_funds);
+
+    // 👈 ESTO HACE QUE BAJE HASTA EL ÚLTIMO AGREGADO
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   void _pegarSeleccionados() {
     List<String> textos = [];
     for (int i = 0; i < _funds.length; i++) {
       if (_seleccionados[i]) {
-        textos.add(_funds[i]); // 👈 YA NO CONCATENA TÍTULO
+        textos.add(_funds[i]);
       }
     }
     if (textos.isEmpty) {
@@ -482,36 +508,47 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
   }
 
   @override
+  void dispose() {
+    textoCtrl.dispose();
+    _scrollController.dispose(); // 👈 NUEVO
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.grey[900],
-      title: const Text('Párrafos', style: TextStyle(color: Colors.white)), // 👈 CAMBIÓ TÍTULO
+      title: const Text('Párrafos', style: TextStyle(color: Colors.white)),
       content: SizedBox(
         width: double.maxFinite,
         height: 400,
-        child: Column(
-          children: [
-            TextField(
-              controller: textoCtrl,
-              style: const TextStyle(color: Colors.white),
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Párrafo', // 👈 SOLO PÁRRAFO
-                labelStyle: TextStyle(color: Colors.white70),
-                hintText: 'Escribe tu fundamento aquí...',
-                hintStyle: TextStyle(color: Colors.white38),
+        child: SingleChildScrollView( // 👈 AQUÍ ESTÁ LA MAGIA
+          controller: _scrollController, // 👈 NUEVO
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: textoCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Párrafo',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  hintText: 'Escribe tu fundamento aquí...',
+                  hintStyle: TextStyle(color: Colors.white38),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
-              onPressed: _agregarFund,
-              child: const Text('AGREGAR PÁRRAFO'),
-            ),
-            const Divider(color: Colors.white24),
-            Expanded(
-              child: ListView.builder(
+              const SizedBox(height: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+                onPressed: _agregarFund,
+                child: const Text('AGREGAR PÁRRAFO'),
+              ),
+              const Divider(color: Colors.white24),
+              // 👈 QUITAMOS EL Expanded Y DEJAMOS QUE SingleChildScrollView MANEJE TODO
+              ListView.builder(
                 shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(), // 👈 IMPORTANTE
                 itemCount: _funds.length,
                 itemBuilder: (context, i) {
                   return CheckboxListTile(
@@ -520,7 +557,7 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
                       style: const TextStyle(color: Colors.white),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                    ), // 👈 SOLO EL TEXTO
+                    ),
                     value: _seleccionados[i],
                     activeColor: Colors.red[900],
                     onChanged: (bool? value) {
@@ -541,8 +578,8 @@ class _FundamentosDialogState extends State<FundamentosDialog> {
                   );
                 },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
