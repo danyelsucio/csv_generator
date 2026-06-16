@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:typed_data'; // 👈 Pa que jale Uint8List
 
 
 
@@ -192,12 +193,12 @@ class _CsvPageState extends State<CsvPage> {
     final csvBytes = [0xEF, 0xBB, 0xBF, ...utf8.encode(csv)];
 
     String? outputFile = await FilePicker.platform.saveFile(
-      dialogTitle: 'Guardar CSV',
-      fileName: '$nombreElegido.csv',
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      bytes: csvBytes, // 👈 CAMBIAS utf8.encode(csv) POR csvBytes
-    );
+  dialogTitle: 'Guardar CSV',
+  fileName: '$nombreElegido.csv',
+  type: FileType.custom,
+  allowedExtensions: ['csv'],
+  bytes: Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]), // 👈 ESTA ES LA LÍNEA
+);
 
     if (outputFile!= null) {
       _snack('Guardado: $nombreElegido.csv');
