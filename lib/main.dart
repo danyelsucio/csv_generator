@@ -14,6 +14,25 @@ void main() async {
   runApp(const MyApp());
 }
 
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Oficios',
+      theme: ThemeData.dark(),
+      home: const OficiosPage(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class OficiosPage extends StatefulWidget {
+  const OficiosPage({super.key});
+  @override
+  State<OficiosPage> createState() => _OficiosPageState();
+}
+
 class ResaltadorController extends TextEditingController {
   final bool resaltar;
 
@@ -60,29 +79,10 @@ class ResaltadorController extends TextEditingController {
   }
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Oficios',
-      theme: ThemeData.dark(),
-      home: const OficiosPage(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-}
-
-class OficiosPage extends StatefulWidget {
-  const OficiosPage({super.key});
-  @override
-  State<OficiosPage> createState() => _OficiosPageState();
-}
-
 class _OficiosPageState extends State<OficiosPage> {
   List<String> _fundamentos = [];
   String _textoEscaneadoCompleto = '';
-  late ResaltadorController _controller; // 👈 CAMBIÓ
+  late ResaltadorController _controller;
   final FocusNode _focusNode = FocusNode();
   bool _resaltarCampos = false;
   final ScrollController _scrollController = ScrollController();
@@ -90,7 +90,7 @@ class _OficiosPageState extends State<OficiosPage> {
   @override
   void initState() {
     super.initState();
-    _controller = ResaltadorController(resaltar: _resaltarCampos); // 👈 INICIALIZA
+    _controller = ResaltadorController(resaltar: _resaltarCampos);
     _cargarFundamentos();
     Future.delayed(Duration.zero, () => _focusNode.requestFocus());
   }
@@ -172,7 +172,7 @@ class _OficiosPageState extends State<OficiosPage> {
   void _insertarTexto(String texto) {
     final int cursorPos = _controller.selection.baseOffset;
     final String nuevoTexto = cursorPos >= 0
-       ? _controller.text.replaceRange(cursorPos, cursorPos, texto)
+      ? _controller.text.replaceRange(cursorPos, cursorPos, texto)
         : _controller.text + texto;
     _controller.value = TextEditingValue(
       text: nuevoTexto,
@@ -198,64 +198,15 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _aplicarResaltado() {
-  setState(() {
-    _resaltarCampos =!_resaltarCampos;
-    // 👇 Creamos controller nuevo con el texto actual y el nuevo estado
-    final textoActual = _controller.text;
-    final seleccionActual = _controller.selection;
-    _controller.dispose();
-    _controller = ResaltadorController(text: textoActual, resaltar: _resaltarCampos);
-    _controller.selection = seleccionActual;
-  });
-  _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
-  }
-
-  List<TextSpan> _buildTextSpans(String text) {
-    final List<TextSpan> spans = [];
-
-    if (!_resaltarCampos) {
-      spans.add(TextSpan(
-        text: text.isEmpty? 'Pega tu texto aquí...' : text,
-        style: TextStyle(
-            color: text.isEmpty? Colors.white38 : Colors.white,
-            fontSize: 16,
-            height: 1.5),
-      ));
-      return spans;
-    }
-
-    final RegExp exp = RegExp(r'\{\{[^}]+\}\}');
-    int lastMatchEnd = 0;
-
-    for (final Match match in exp.allMatches(text)) {
-      if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(
-          text: text.substring(lastMatchEnd, match.start),
-          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-        ));
-      }
-      spans.add(TextSpan(
-        text: match.group(0),
-        style: const TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold, height: 1.5),
-      ));
-      lastMatchEnd = match.end;
-    }
-
-    if (lastMatchEnd < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastMatchEnd),
-        style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-      ));
-    }
-
-    if (spans.isEmpty) {
-      spans.add(const TextSpan(
-        text: 'Pega tu texto aquí...',
-        style: TextStyle(color: Colors.white38, fontSize: 16, height: 1.5),
-      ));
-    }
-
-    return spans;
+    setState(() {
+      _resaltarCampos =!_resaltarCampos;
+      final textoActual = _controller.text;
+      final seleccionActual = _controller.selection;
+      _controller.dispose();
+      _controller = ResaltadorController(text: textoActual, resaltar: _resaltarCampos);
+      _controller.selection = seleccionActual;
+    });
+    _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
   }
 
   void _snack(String msg) {
@@ -301,29 +252,32 @@ class _OficiosPageState extends State<OficiosPage> {
         ],
       ),
       body: Container(
-  margin: const EdgeInsets.all(12),
-  decoration: BoxDecoration(
-    border: Border.all(color: Colors.red[900]!),
-    borderRadius: BorderRadius.circular(8),
-    color: const Color(0xFF0A0A0A),
-  ),
-  child: TextField(
-    controller: _controller,
-    focusNode: _focusNode,
-    scrollController: _scrollController,
-    style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-    cursorColor: Colors.red,
-    maxLines: null,
-    expands: true, // 👈 Esto hace que llene todo el container
-    textAlignVertical: TextAlignVertical.top,
-    decoration: const InputDecoration(
-      border: InputBorder.none,
-      contentPadding: EdgeInsets.all(12),
-      hintText: 'Pega tu texto aquí...',
-      hintStyle: TextStyle(color: Colors.white38),
-    ),
-  ),
-),
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.red[900]!),
+          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFF0A0A0A),
+        ),
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          scrollController: _scrollController,
+          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+          cursorColor: Colors.red,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.all(12),
+            hintText: 'Pega tu texto aquí...',
+            hintStyle: TextStyle(color: Colors.white38),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class FundamentosDialog extends StatefulWidget {
   final List<String> fundamentos;
@@ -604,7 +558,7 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
         child: _procesando
-           ? const CircularProgressIndicator(color: Colors.white)
+          ? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.camera),
       ),
     );
