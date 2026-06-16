@@ -39,6 +39,7 @@ class _OficiosPageState extends State<OficiosPage> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _resaltarCampos = false;
+  final ScrollController _scrollController = ScrollController(); // 👈 NUEVO
 
   @override
   void initState() {
@@ -212,6 +213,7 @@ class _OficiosPageState extends State<OficiosPage> {
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -246,42 +248,44 @@ class _OficiosPageState extends State<OficiosPage> {
         ],
       ),
       body: Container(
-        margin: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.red[900]!),
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF0A0A0A),
+  margin: const EdgeInsets.all(12),
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.red[900]!),
+    borderRadius: BorderRadius.circular(8),
+    color: const Color(0xFF0A0A0A),
+  ),
+  child: SingleChildScrollView(
+    controller: _scrollController, // 👈 MISMO CONTROLLER PA LOS 2
+    padding: const EdgeInsets.all(12),
+    child: Stack(
+      children: [
+        // 👇 CAPA 1: Texto pintado que crece con el contenido
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _controller,
+          builder: (context, value, child) {
+            return SelectableText.rich(
+              TextSpan(children: _buildTextSpans(value.text)),
+            );
+          },
         ),
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, value, child) {
-                  return SelectableText.rich(
-                    TextSpan(children: _buildTextSpans(value.text)),
-                  );
-                },
-              ),
-            ),
-            TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
-              cursorColor: Colors.red,
-              maxLines: null,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(12),
-              ),
-            ),
-          ],
+        // 👇 CAPA 2: TextField invisible que también crece
+        TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          scrollController: _scrollController, // 👈 MISMO CONTROLLER
+          style: const TextStyle(color: Colors.transparent, fontSize: 16, height: 1.5),
+          cursorColor: Colors.red,
+          maxLines: null, // 👈 ESTO HACE QUE CREZCA INFINITO
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isCollapsed: true, // 👈 Quita padding extra
+            contentPadding: EdgeInsets.zero,
+          ),
         ),
-      ),
-    );
-  }
-}
+      ],
+    ),
+  ),
+),
 
 class FundamentosDialog extends StatefulWidget {
   final List<String> fundamentos;
