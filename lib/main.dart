@@ -102,13 +102,137 @@ class _OficiosPageState extends State<OficiosPage> {
   bool _resaltarCampos = false;
   final ScrollController _scrollController = ScrollController();
   List<Map<String, int>> _camposVerdes = [];
+  OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
     super.initState();
     _controller = ResaltadorController(resaltar: _resaltarCampos, camposVerdes: _camposVerdes);
+    _controller.addListener(_checarCampoEnCursor);
     _cargarFundamentos();
     Future.delayed(Duration.zero, () => _focusNode.requestFocus());
+  }
+
+  void _checarCampoEnCursor() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+
+    final int pos = _controller.selection.baseOffset;
+    if (pos < 0 ||!_controller.selection.isCollapsed) return;
+
+    final campo = _buscarCampoEnPosicion(pos);
+    if (campo == null) return;
+
+    final nombreCampo = campo['contenido'].toUpperCase();
+
+    final opciones = _fundamentos
+  .where((f) => f['titulo']!.toUpperCase() == nombreCampo)
+  .toList();
+
+    if (opciones.isNotEmpty) {
+      _mostrarMenuFlotante(nombreCampo, opciones, campo);
+    }
+  }
+
+  void _mostrarMenuFlotante(String nombreCampo, List<Map<String, String>> opciones, Map<String, dynamic> campo) {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: offset.dy + 100,
+        left: 20,
+        right: 20,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey[900],
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.red[900]!, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.red[900],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Opciones para $nombreCampo',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                        onPressed: () {
+                          _overlayEntry?.remove();
+                          _overlayEntry = null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: opciones.length,
+                    itemBuilder: (context, i) {
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          opciones[i]['texto']!,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        onTap: () {
+                          _insertarTextoEnCampo(opciones[i]['texto']!, campo);
+                          _overlayEntry?.remove();
+                          _overlayEntry = null;
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _insertarTextoEnCampo(String texto, Map<String, dynamic> campo) {
+    final int inicio = campo['inicio']!;
+    final int fin = campo['fin']!;
+    final String textoActual = _controller.text;
+    final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
+
+    setState(() {
+      _camposVerdes.removeWhere((r) => r['inicio']! >= inicio && r['fin']! <= fin);
+      _camposVerdes.add({'inicio': inicio, 'fin': inicio + texto.length});
+      _actualizarController(nuevoTexto, inicio + texto.length);
+    });
+    _focusNode.requestFocus();
+  }
+
+  Map<String, dynamic>? _buscarCampoEnPosicion(int pos) {
+    final text = _controller.text;
+    final RegExp exp = RegExp(r'\{\{([^}]+)\}\}');
+    for (final match in exp.allMatches(text)) {
+      if (pos >= match.start && pos <= match.end) {
+        return {
+          'inicio': match.start,
+          'fin': match.end,
+          'contenido': match.group(1)!.trim()
+        };
+      }
+    }
+    return null;
   }
 
   Future<void> _cargarFundamentos() async {
@@ -166,6 +290,9 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _abrirPaginaFundamentos() async {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+
     final textoParaInsertar = await Navigator.push<String>(
       context,
       MaterialPageRoute(
@@ -175,7 +302,7 @@ class _OficiosPageState extends State<OficiosPage> {
 
     if (textoParaInsertar!= null && textoParaInsertar.isNotEmpty) {
       _insertarTexto(textoParaInsertar);
-      _snack('Fundamentos agregados');
+      _snack('Texto agregado');
     }
     _cargarFundamentos();
   }
@@ -206,75 +333,6 @@ class _OficiosPageState extends State<OficiosPage> {
     }
   }
 
-  Map<String, dynamic>? _buscarCampoEnPosicion(int pos) {
-    final text = _controller.text;
-    final RegExp exp = RegExp(r'\{\{([^}]+)\}\}');
-    for (final match in exp.allMatches(text)) {
-      if (pos >= match.start && pos <= match.end) {
-        return {
-          'inicio': match.start,
-          'fin': match.end,
-          'contenido': match.group(1)!.trim() // 👈 Lo de adentro sin llaves
-        };
-      }
-    }
-    return null;
-  }
-
-  // 👇 NUEVO: Menú rápido para CALIDAD
-  // 👇 REEMPLAZA _manejarLongPress por esta
-void _manejarLongPress() {
-  final int pos = _controller.selection.baseOffset;
-  if (pos < 0) return;
-  final campo = _buscarCampoEnPosicion(pos);
-
-  // 👇 SOLO SI EL CONTENIDO ES "CALIDAD"
-  if (campo!= null && campo['contenido'].toUpperCase() == 'CALIDAD') {
-    _mostrarOpcionesCalidad();
-  }
-}
-
-// 👇 REEMPLAZA _mostrarOpcionesCalidad por esta
-void _mostrarOpcionesCalidad() async {
-  // Filtra SOLO los que tengan título CALIDAD
-  final opciones = _fundamentos
-    .where((f) => f['titulo']!.toUpperCase() == 'CALIDAD')
-    .toList();
-
-  if (opciones.isEmpty) {
-    _snack('No hay opciones registradas para CALIDAD');
-    return;
-  }
-
-  final seleccion = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Colors.grey[900],
-      title: const Text('Selecciona CALIDAD', style: TextStyle(color: Colors.white)),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: opciones.length,
-          itemBuilder: (context, i) {
-            return ListTile(
-              title: Text(
-                opciones[i]['texto']!,
-                style: const TextStyle(color: Colors.white),
-              ),
-              onTap: () => Navigator.pop(context, opciones[i]['texto']),
-            );
-          },
-        ),
-      ),
-    ),
-  );
-
-  if (seleccion!= null) {
-    _insertarTexto(seleccion);
-  }
-}
-
   void _insertarTexto(String texto) {
     final int cursorPos = _controller.selection.baseOffset;
     final String textoActual = _controller.text;
@@ -292,7 +350,7 @@ void _mostrarOpcionesCalidad() async {
       });
     } else {
       final String nuevoTexto = cursorPos >= 0
-  ? textoActual.replaceRange(cursorPos, cursorPos, texto)
+? textoActual.replaceRange(cursorPos, cursorPos, texto)
         : textoActual + texto;
       final int nuevaPos = cursorPos >= 0? cursorPos + texto.length : nuevoTexto.length;
 
@@ -310,12 +368,14 @@ void _mostrarOpcionesCalidad() async {
 
   void _actualizarController(String texto, int posCursor) {
     final seleccionActual = TextSelection.collapsed(offset: posCursor);
+    _controller.removeListener(_checarCampoEnCursor);
     _controller.dispose();
     _controller = ResaltadorController(
       text: texto,
       resaltar: _resaltarCampos,
       camposVerdes: _camposVerdes
     );
+    _controller.addListener(_checarCampoEnCursor);
     _controller.selection = seleccionActual;
     setState(() {});
   }
@@ -326,6 +386,8 @@ void _mostrarOpcionesCalidad() async {
   }
 
   void _limpiarTexto() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
     setState(() {
       _controller.clear();
       _resaltarCampos = false;
@@ -352,6 +414,8 @@ void _mostrarOpcionesCalidad() async {
 
   @override
   void dispose() {
+    _overlayEntry?.remove();
+    _controller.removeListener(_checarCampoEnCursor);
     _controller.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -381,7 +445,7 @@ void _mostrarOpcionesCalidad() async {
             },
           ),
           IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
-          IconButton(icon: const Icon(Icons.menu_book), onPressed: _abrirPaginaFundamentos, tooltip: 'Fundamentos'),
+          IconButton(icon: const Icon(Icons.menu_book), onPressed: _abrirPaginaFundamentos, tooltip: 'Librito'),
           IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
           IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTodo, tooltip: 'Copiar'),
           IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
@@ -395,23 +459,20 @@ void _mostrarOpcionesCalidad() async {
           borderRadius: BorderRadius.circular(8),
           color: const Color(0xFF0A0A0A),
         ),
-        child: GestureDetector(
-          onLongPress: _manejarLongPress, // 👈 AQUÍ ESTÁ LA MAGIA
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            scrollController: _scrollController,
-            style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-            cursorColor: Colors.red,
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.all(12),
-              hintText: 'Pega tu texto aquí...',
-              hintStyle: TextStyle(color: Colors.white38),
-            ),
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          scrollController: _scrollController,
+          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+          cursorColor: Colors.red,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.all(12),
+            hintText: 'Pega tu texto aquí...',
+            hintStyle: TextStyle(color: Colors.white38),
           ),
         ),
       ),
@@ -517,7 +578,7 @@ class _FundamentosPageState extends State<FundamentosPage> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('FUNDAMENTOS'),
+        title: const Text('LIBRITO'),
         actions: [
           IconButton(
             icon: const Icon(Icons.cleaning_services),
@@ -547,7 +608,7 @@ class _FundamentosPageState extends State<FundamentosPage> {
                   style: const TextStyle(color: Colors.white),
                   maxLines: 6,
                   decoration: const InputDecoration(
-                    hintText: 'CALIDAD\nimputado\n\nCALIDAD\ndetenido\n\nARTÍCULO 14\nTexto...',
+                    hintText: 'CALIDAD\nimputado\n\nCALIDAD\ndetenido\n\nRECEPCIÓN\nSe recibió...',
                     hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                     border: InputBorder.none,
                   ),
@@ -556,7 +617,7 @@ class _FundamentosPageState extends State<FundamentosPage> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
                   onPressed: _procesarTextoPegado,
-                  child: const Text('GUARDAR FUNDAMENTOS'),
+                  child: const Text('GUARDAR EN LIBRITO'),
                 ),
               ],
             ),
@@ -738,7 +799,7 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.red[900],
         onPressed: _procesando? null : _escanearTexto,
         child: _procesando
-    ? const CircularProgressIndicator(color: Colors.white)
+ ? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.camera),
       ),
     );
