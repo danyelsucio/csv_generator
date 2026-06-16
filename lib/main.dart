@@ -127,18 +127,42 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _pegarFecha() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
-    );
-    if (picked!= null) {
-      String fecha = DateFormat('dd/MM/yy').format(picked);
-      _insertarTexto(fecha);
-    }
+  DateTime? picked = await showDatePicker(
+    context: context,
+    initialDate: DateTime.now(),
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2100),
+    builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
+  );
+  if (picked!= null) {
+    String fecha = _formatearFechaLarga(picked);
+    _insertarTexto(fecha);
   }
+}
+
+// 👇 PEGA ESTA FUNCIÓN NUEVA DEBAJO DE _pegarFecha()
+String _formatearFechaLarga(DateTime fecha) {
+  final dia = fecha.day;
+  final mes = fecha.month;
+
+  final diasEnLetra = [
+    '', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+    'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
+    'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve', 'treinta',
+    'treinta y uno'
+  ];
+
+  final mesesEnLetra = [
+    '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ];
+
+  final diaDosDigitos = dia.toString().padLeft(2, '0');
+  final diaLetra = diasEnLetra[dia];
+  final mesLetra = mesesEnLetra[mes];
+
+  return '$diaDosDigitos $diaLetra de $mesLetra';
+}
 
   void _gestionarFundamentos() async {
     await showDialog(
