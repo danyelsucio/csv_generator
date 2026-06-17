@@ -749,7 +749,7 @@ class _OficiosPageState extends State<OficiosPage> {
               },
             ),
             if (_pedidos.isNotEmpty)
-            ..._pedidos.asMap().entries.map((e) => ListTile(
+           ..._pedidos.asMap().entries.map((e) => ListTile(
                 dense: true,
                 contentPadding: const EdgeInsets.only(left: 72, right: 16),
                 title: Text(
@@ -782,7 +782,7 @@ class _OficiosPageState extends State<OficiosPage> {
               },
             ),
             if (_recibidos.isNotEmpty)
-            ..._recibidos.asMap().entries.map((e) => ListTile(
+           ..._recibidos.asMap().entries.map((e) => ListTile(
                 dense: true,
                 contentPadding: const EdgeInsets.only(left: 72, right: 16),
                 title: Text(
@@ -1049,7 +1049,174 @@ class _FundamentosPageState extends State<FundamentosPage> {
                       color: estaSeleccionado? Colors.blue[900]!.withOpacity(0.3) : Colors.grey[900],
                       border: Border.all(
                         color: estaSeleccionado? Colors.blue : Colors.transparent,
-                                                return CameraPreview(_controller);
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListTile(
+                      title: Text(
+                        fund['titulo']!,
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        fund['texto']!,
+                        style: TextStyle(
+                          color: estaSeleccionado? Colors.blue[200] : Colors.white70,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        onPressed: () => _editarFund(i),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CameraScreen extends StatefulWidget {
+  final String textoAnterior;
+  const CameraScreen({super.key, required this.textoAnterior});
+
+  @override
+  _CameraScreenState createState() => _CameraScreenState();
+}
+
+class _CameraScreenState extends State<CameraScreen> {
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
+  final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  bool _procesando = false;
+  String _textoCompleto = '';
+  final TextEditingController _textoController = TextEditingController();
+  bool _fotoTomada = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CameraController(cameras[0], ResolutionPreset.high);
+    _initializeControllerFuture = _controller.initialize();
+    _textoController.text = widget.textoAnterior;
+    _textoCompleto = widget.textoAnterior;
+    // Si ya hay texto anterior, mostrarlo directo pa sacar más datos
+    if (widget.textoAnterior.isNotEmpty) {
+      _fotoTomada = true;
+    }
+  }
+
+  Future<void> _escanearTexto() async {
+    try {
+      setState(() => _procesando = true);
+      await _initializeControllerFuture;
+      final image = await _controller.takePicture();
+      final inputImage = InputImage.fromFilePath(image.path);
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      setState(() {
+        _textoCompleto = recognizedText.text;
+        _textoController.text = recognizedText.text;
+        _procesando = false;
+        _fotoTomada = true;
+      });
+    } catch (e) {
+      setState(() => _procesando = false);
+    }
+  }
+
+  void _pegarSeleccionYCerrar() {
+    final seleccion = _textoController.selection;
+    String textoAPegar = '';
+
+    if (seleccion.isValid &&!seleccion.isCollapsed) {
+      textoAPegar = seleccion.textInside(_textoController.text);
+    }
+
+    Navigator.pop(context, {
+      'completo': _textoCompleto,
+      'seleccion': textoAPegar,
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    textRecognizer.close();
+    _textoController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text('Escanear y seleccionar'),
+        actions: [
+          if (_fotoTomada)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _pegarSeleccionYCerrar,
+              tooltip: 'Pegar selección',
+            ),
+        ],
+      ),
+      body: _fotoTomada
+      ? Container(
+              color: Colors.grey[900],
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Selecciona texto con el dedo y pica +',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt, color: Colors.red),
+                        onPressed: () => setState(() => _fotoTomada = false),
+                        tooltip: 'Tomar otra foto',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _textoController,
+                      readOnly: true,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Texto escaneado...',
+                        hintStyle: TextStyle(color: Colors.white38),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Stack(
+              children: [
+                Positioned.fill(
+                  child: FutureBuilder<void>(
+                    future: _initializeControllerFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.done) {
+                        return CameraPreview(_controller);
                       } else {
                         return const Center(child: CircularProgressIndicator());
                       }
@@ -1065,7 +1232,7 @@ class _FundamentosPageState extends State<FundamentosPage> {
                       backgroundColor: Colors.red[900],
                       onPressed: _procesando? null : _escanearTexto,
                       child: _procesando
-                       ? const CircularProgressIndicator(color: Colors.white)
+                     ? const CircularProgressIndicator(color: Colors.white)
                           : const Icon(Icons.camera, size: 32),
                     ),
                   ),
@@ -1074,4 +1241,4 @@ class _FundamentosPageState extends State<FundamentosPage> {
             ),
     );
   }
-              }
+}
