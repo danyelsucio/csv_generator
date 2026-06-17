@@ -554,56 +554,163 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _agregarPedido() async {
-    final volanteCtrl = TextEditingController();
-    final carpetaCtrl = TextEditingController();
-    final folioCtrl = TextEditingController();
-    final direccionCtrl = TextEditingController();
+  final volanteCtrl = TextEditingController();
+  final carpetaCtrl = TextEditingController();
+  final folioCtrl = TextEditingController();
+  final direccionCtrl = TextEditingController();
+  final fechaCtrl = TextEditingController(); // NUEVO CAMPO
 
-    final resultado = await showDialog<bool>(
+  // FocusNodes para saber dónde está el cursor
+  final volanteFocus = FocusNode();
+  final carpetaFocus = FocusNode();
+  final folioFocus = FocusNode();
+  final direccionFocus = FocusNode();
+  final fechaFocus = FocusNode();
+
+  TextEditingController? _getActiveController() {
+    if (volanteFocus.hasFocus) return volanteCtrl;
+    if (carpetaFocus.hasFocus) return carpetaCtrl;
+    if (folioFocus.hasFocus) return folioCtrl;
+    if (direccionFocus.hasFocus) return direccionCtrl;
+    if (fechaFocus.hasFocus) return fechaCtrl;
+    return null;
+  }
+
+  void _insertarEnCampoActivo(String texto) {
+    final ctrl = _getActiveController();
+    if (ctrl!= null) {
+      final int pos = ctrl.selection.baseOffset;
+      final String nuevo = ctrl.text.replaceRange(pos >= 0? pos : ctrl.text.length, pos >= 0? pos : ctrl.text.length, texto);
+      ctrl.text = nuevo;
+      ctrl.selection = TextSelection.collapsed(offset: (pos >= 0? pos : ctrl.text.length) + texto.length);
+    }
+  }
+
+  Future<void> _abrirLibritoDialog() async {
+    final texto = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FundamentosPage(fundamentos: _fundamentos),
+      ),
+    );
+    if (texto!= null && texto.isNotEmpty) {
+      _insertarEnCampoActivo(texto);
+    }
+  }
+
+  Future<void> _abrirScannerDialog() async {
+    if (cameras.isEmpty) {
+      _snack('No hay cámaras disponibles');
+      return;
+    }
+    final resultado = await Navigator.push<Map<String, String>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CameraScreen(textoAnterior: _textoEscaneadoCompleto),
+      ),
+    );
+    if (resultado!= null) {
+      setState(() {
+        _textoEscaneadoCompleto = resultado['completo']!;
+      });
+      _guardarTextoEscaneado();
+      if (resultado['seleccion']!.isNotEmpty) {
+        _insertarEnCampoActivo(resultado['seleccion']!);
+      }
+    }
+  }
+
+  Future<void> _pegarFechaDialog() async {
+    DateTime? picked = await showDatePicker(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('Nuevo Pedido', style: TextStyle(color: Colors.white)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
+    );
+    if (picked!= null) {
+      String fecha = _formatearFechaLarga(picked);
+      _insertarEnCampoActivo(fecha);
+    }
+  }
+
+  final resultado = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Nuevo Pedido', style: TextStyle(color: Colors.white)),
+          Row(
             children: [
-              _campoDialog(volanteCtrl, 'VOLANTE'),
-              _campoDialog(carpetaCtrl, 'CARPETA'),
-              _campoDialog(folioCtrl, 'FOLIO'),
-              _campoDialog(direccionCtrl, 'DIRECCIÓN'),
+              IconButton(
+                icon: const Icon(Icons.calendar_month, color: Colors.white70, size: 20),
+                onPressed: _pegarFechaDialog,
+                tooltip: 'Fecha',
+              ),
+              IconButton(
+                icon: const Icon(Icons.menu_book, color: Colors.white70, size: 20),
+                onPressed: _abrirLibritoDialog,
+                tooltip: 'Librito',
+              ),
+              IconButton(
+                icon: const Icon(Icons.camera_alt, color: Colors.white70, size: 20),
+                onPressed: _abrirScannerDialog,
+                tooltip: 'Escanear',
+              ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Guardar', style: TextStyle(color: Colors.green)),
           ),
         ],
       ),
-    );
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _campoDialog(volanteCtrl, 'VOLANTE', volanteFocus),
+            _campoDialog(carpetaCtrl, 'CARPETA', carpetaFocus),
+            _campoDialog(folioCtrl, 'FOLIO', folioFocus),
+            _campoDialog(direccionCtrl, 'DIRECCIÓN', direccionFocus),
+            _campoDialog(fechaCtrl, 'FECHA', fechaFocus), // NUEVO
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Guardar', style: TextStyle(color: Colors.green)),
+        ),
+      ],
+    ),
+  );
 
-    if (resultado == true) {
-      setState(() {
-        _pedidos.add({
-          'volante': volanteCtrl.text.trim(),
-          'carpeta': carpetaCtrl.text.trim(),
-          'folio': folioCtrl.text.trim(),
-          'direccion': direccionCtrl.text.trim(),
-        });
+  if (resultado == true) {
+    setState(() {
+      _pedidos.add({
+        'volante': volanteCtrl.text.trim(),
+        'carpeta': carpetaCtrl.text.trim(),
+        'folio': folioCtrl.text.trim(),
+        'direccion': direccionCtrl.text.trim(),
+        'fecha': fechaCtrl.text.trim(), // NUEVO
       });
-      _guardarPedidos();
-    }
+    });
+    _guardarPedidos();
+  }
 
-    volanteCtrl.dispose();
-    carpetaCtrl.dispose();
-    folioCtrl.dispose();
-    direccionCtrl.dispose();
+  volanteCtrl.dispose();
+  carpetaCtrl.dispose();
+  folioCtrl.dispose();
+  direccionCtrl.dispose();
+  fechaCtrl.dispose();
+  volanteFocus.dispose();
+  carpetaFocus.dispose();
+  folioFocus.dispose();
+  direccionFocus.dispose();
+  fechaFocus.dispose();
   }
 
   void _agregarRecibido() async {
