@@ -19,12 +19,79 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Oficios',
+      title: 'Escuadrón de Michis Tableros',
       theme: ThemeData.dark(),
       home: const OficiosPage(),
       debugShowCheckedModeBanner: false,
     );
   }
+}
+
+// MODELOS DE DATOS
+class TablaMichi {
+  final String id;
+  final String nombre;
+  final List<String> columnas;
+  final List<List<String>> filas;
+  
+  TablaMichi({
+    required this.id,
+    required this.nombre,
+    required this.columnas,
+    required this.filas,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'nombre': nombre,
+    'columnas': columnas,
+    'filas': filas,
+  };
+
+  factory TablaMichi.fromJson(Map<String, dynamic> json) => TablaMichi(
+    id: json['id'],
+    nombre: json['nombre'],
+    columnas: List<String>.from(json['columnas']),
+    filas: List<List<String>>.from(
+      json['filas'].map((e) => List<String>.from(e))
+    ),
+  );
+}
+
+class CarpetaMichi {
+  final String carpeta;
+  final String volante;
+  final String folio;
+  final String direccion;
+  final String fecha;
+  final String? fechaRecibido;
+  
+  CarpetaMichi({
+    required this.carpeta,
+    required this.volante,
+    required this.folio,
+    required this.direccion,
+    required this.fecha,
+    this.fechaRecibido,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'carpeta': carpeta,
+    'volante': volante,
+    'folio': folio,
+    'direccion': direccion,
+    'fecha': fecha,
+    'fechaRecibido': fechaRecibido,
+  };
+
+  factory CarpetaMichi.fromJson(Map<String, dynamic> json) => CarpetaMichi(
+    carpeta: json['carpeta'],
+    volante: json['volante'],
+    folio: json['folio'],
+    direccion: json['direccion'],
+    fecha: json['fecha'],
+    fechaRecibido: json['fechaRecibido'],
+  );
 }
 
 class OficiosPage extends StatefulWidget {
@@ -33,1147 +100,545 @@ class OficiosPage extends StatefulWidget {
   State<OficiosPage> createState() => _OficiosPageState();
 }
 
-class ResaltadorController extends TextEditingController {
-  final List<Map<String, int>> camposVerdes;
-
-  ResaltadorController({String? text, this.camposVerdes = const []}) : super(text: text);
-
-  @override
-  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
-    final List<TextSpan> spans = [];
-    final String text = this.text;
-    final baseStyle = style?? const TextStyle(color: Colors.white, fontSize: 16, height: 1.5);
-
-    if (text.isEmpty) {
-      return TextSpan(
-        text: 'Pega tu texto aquí...',
-        style: baseStyle.copyWith(color: Colors.white38),
-      );
-    }
-
-    // 1. Marcamos qué rangos son verdes
-    List<bool> esVerde = List.filled(text.length, false);
-    for (var rango in camposVerdes) {
-      int ini = rango['inicio']!;
-      int fin = rango['fin']!;
-      if (ini >= 0 && fin <= text.length && ini < fin) {
-        for (int i = ini; i < fin; i++) esVerde[i] = true;
-      }
-    }
-
-    // 2. Recorremos letra por letra: ROJO tiene prioridad sobre VERDE
-    int i = 0;
-    while (i < text.length) {
-      // PRIORIDAD 1: {{}} SIEMPRE ROJO aunque esté en rango verde
-      if (i + 1 < text.length && text[i] == '{' && text[i + 1] == '{') {
-        int start = i;
-        int end = text.indexOf('}}', i);
-        if (end!= -1) {
-          end += 2;
-          spans.add(TextSpan(
-            text: text.substring(start, end),
-            style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
-          ));
-          i = end;
-          continue;
-        }
-      }
-
-      // PRIORIDAD 2: Si es verde y no es {{}}
-      if (esVerde[i]) {
-        int start = i;
-        while (i < text.length && esVerde[i] &&!(i + 1 < text.length && text[i] == '{' && text[i + 1] == '{')) {
-          i++;
-        }
-        spans.add(TextSpan(
-          text: text.substring(start, i),
-          style: baseStyle.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
-        ));
-      } else {
-        // Texto normal
-        spans.add(TextSpan(text: text[i], style: baseStyle));
-        i++;
-      }
-    }
-
-    return TextSpan(children: spans);
-  }
-}
-
-  
+//PARTE 1 ACA ARRIBA
 
 class _OficiosPageState extends State<OficiosPage> {
-  List<Map<String, String>> _fundamentos = [];
-  List<Map<String, String>> _pedidos = [];
-  List<Map<String, String>> _recibidos = [];
+  // BASE DE DATOS
+  List<TablaMichi> _tablas = [];
+  List<CarpetaMichi> _carpetasPedidas = [];
+  List<CarpetaMichi> _carpetasRecibidas = [];
+  List<CarpetaMichi> _carpetasPendientes = [];
+  List<String> _datosEscaneados = [];
+  List<String> _papelera = [];
 
-  String _textoEscaneadoCompleto = '';
-  late ResaltadorController _controller;
-  final FocusNode _focusNode = FocusNode();
-  final ScrollController _scrollController = ScrollController();
-  List<Map<String, int>> _camposVerdes = [];
-  OverlayEntry? _overlayEntry;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  // BARRA SUPERIOR DINÁMICA
+  String _labelActual = 'A sus órdenes Lic. Adrianayeli';
+  final TextEditingController _inputController = TextEditingController();
+  bool _mostrarEnter = false;
+  int _columnaIndexActual = 0;
+  int _filaIndexActual = 0;
 
-  static const String _keyTextoPrincipal = 'texto_principal_oficio';
-  static const String _keyTextoEscaneado = 'texto_escaneado_completo';
-  static const String _keyPedidos = 'lista_pedidos';
-  static const String _keyRecibidos = 'lista_recibidos';
+  // ESTADO DE LA APP
+  TablaMichi? _tablaEnTurno;
+  CarpetaMichi? _carpetaEnTurno;
+  String _tipoListaEnTurno = ''; // pedidas, recibidas, pendientes
+  bool _modoCreacionTabla = false;
+  List<String> _columnasTemp = [];
+
+  // HISTORIAL PARA DESHACER - MICHI MAGO
+  final List<Map<String, dynamic>> _historial = [];
+
+  // KEYS SHARED PREFERENCES
+  static const String _keyTablas = 'tablas_michi';
+  static const String _keyPedidas = 'carpetas_pedidas';
+  static const String _keyRecibidas = 'carpetas_recibidas';
+  static const String _keyPendientes = 'carpetas_pendientes';
+  static const String _keyEscaneados = 'datos_escaneados';
+  static const String _keyPapelera = 'papelera_mago';
 
   @override
   void initState() {
     super.initState();
-    _controller = ResaltadorController(camposVerdes: _camposVerdes);
-    _controller.addListener(_checarCampoEnCursor);
-    _controller.addListener(_guardarTextoPrincipal);
     _cargarTodo();
-    Future.delayed(Duration.zero, () => _focusNode.requestFocus());
   }
 
   Future<void> _cargarTodo() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final String? textoGuardado = prefs.getString(_keyTextoPrincipal);
-    if (textoGuardado!= null && textoGuardado.isNotEmpty) {
-      _actualizarController(textoGuardado, textoGuardado.length);
-    }
-
-    _textoEscaneadoCompleto = prefs.getString(_keyTextoEscaneado)?? '';
-
-    final String? fundString = prefs.getString('fundamentos_v2');
-    if (fundString!= null) {
-      _fundamentos = List<Map<String, String>>.from(
-        json.decode(fundString).map((e) => Map<String, String>.from(e))
+    final String? tablasString = prefs.getString(_keyTablas);
+    if (tablasString!= null) {
+      _tablas = List<TablaMichi>.from(
+        json.decode(tablasString).map((e) => TablaMichi.fromJson(e))
       );
     }
 
-    final String? pedidosString = prefs.getString(_keyPedidos);
-    if (pedidosString!= null) {
-      _pedidos = List<Map<String, String>>.from(
-        json.decode(pedidosString).map((e) => Map<String, String>.from(e))
+    final String? pedidasString = prefs.getString(_keyPedidas);
+    if (pedidasString!= null) {
+      _carpetasPedidas = List<CarpetaMichi>.from(
+        json.decode(pedidasString).map((e) => CarpetaMichi.fromJson(e))
       );
     }
 
-    final String? recibidosString = prefs.getString(_keyRecibidos);
-    if (recibidosString!= null) {
-      _recibidos = List<Map<String, String>>.from(
-        json.decode(recibidosString).map((e) => Map<String, String>.from(e))
+    final String? recibidasString = prefs.getString(_keyRecibidas);
+    if (recibidasString!= null) {
+      _carpetasRecibidas = List<CarpetaMichi>.from(
+        json.decode(recibidasString).map((e) => CarpetaMichi.fromJson(e))
       );
+    }
+
+    final String? pendientesString = prefs.getString(_keyPendientes);
+    if (pendientesString!= null) {
+      _carpetasPendientes = List<CarpetaMichi>.from(
+        json.decode(pendientesString).map((e) => CarpetaMichi.fromJson(e))
+      );
+    }
+
+    final String? escaneadosString = prefs.getString(_keyEscaneados);
+    if (escaneadosString!= null) {
+      _datosEscaneados = List<String>.from(json.decode(escaneadosString));
+    }
+
+    final String? papeleraString = prefs.getString(_keyPapelera);
+    if (papeleraString!= null) {
+      _papelera = List<String>.from(json.decode(papeleraString));
     }
 
     setState(() {});
   }
 
-  void _guardarTextoPrincipal() async {
+  Future<void> _guardarTablas() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyTextoPrincipal, _controller.text);
+    await prefs.setString(_keyTablas, json.encode(_tablas.map((e) => e.toJson()).toList()));
   }
 
-  Future<void> _guardarTextoEscaneado() async {
+  Future<void> _guardarCarpetas(String tipo) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyTextoEscaneado, _textoEscaneadoCompleto);
-  }
-
-  Future<void> _guardarFundamentos() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fundamentos_v2', json.encode(_fundamentos));
-  }
-
-  Future<void> _guardarPedidos() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyPedidos, json.encode(_pedidos));
-  }
-
-  Future<void> _guardarRecibidos() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyRecibidos, json.encode(_recibidos));
-  }
-
-  void _checarCampoEnCursor() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-
-    final int pos = _controller.selection.baseOffset;
-    if (pos < 0 ||!_controller.selection.isCollapsed) return;
-
-    final campo = _buscarCampoEnPosicion(pos);
-    if (campo == null) return;
-
-    final nombreCampo = campo['contenido'].toUpperCase();
-
-    final opciones = _fundamentos
-.where((f) => f['titulo']!.toUpperCase() == nombreCampo)
-.toList();
-
-    if (opciones.isNotEmpty) {
-      _mostrarMenuFlotante(nombreCampo, opciones, campo);
+    if (tipo == 'pedidas') {
+      await prefs.setString(_keyPedidas, json.encode(_carpetasPedidas.map((e) => e.toJson()).toList()));
+    } else if (tipo == 'recibidas') {
+      await prefs.setString(_keyRecibidas, json.encode(_carpetasRecibidas.map((e) => e.toJson()).toList()));
+    } else if (tipo == 'pendientes') {
+      await prefs.setString(_keyPendientes, json.encode(_carpetasPendientes.map((e) => e.toJson()).toList()));
     }
   }
 
-  void _mostrarMenuFlotante(String nombreCampo, List<Map<String, String>> opciones, Map<String, dynamic> campo) {
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final offset = renderBox.localToGlobal(Offset.zero);
-
-    _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: offset.dy + 100,
-        left: 20,
-        right: 20,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.grey[900],
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.red[900]!, width: 2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.red[900],
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Opciones para $nombreCampo',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                        onPressed: () {
-                          _overlayEntry?.remove();
-                          _overlayEntry = null;
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: opciones.length,
-                    itemBuilder: (context, i) {
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          opciones[i]['texto']!,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        onTap: () {
-                          _insertarTextoEnCampo(opciones[i]['texto']!, campo);
-                          _overlayEntry?.remove();
-                          _overlayEntry = null;
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    Overlay.of(context).insert(_overlayEntry!);
+  Future<void> _guardarEscaneados() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyEscaneados, json.encode(_datosEscaneados));
   }
 
-  void _insertarTextoEnCampo(String texto, Map<String, dynamic> campo) {
-    final int inicio = campo['inicio']!;
-    final int fin = campo['fin']!;
-    final String textoActual = _controller.text;
-    final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
+  Future<void> _guardarPapelera() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPapelera, json.encode(_papelera));
+  }
 
+  void _resetearBarraSuperior() {
     setState(() {
-      _camposVerdes.removeWhere((r) => r['inicio']! >= inicio && r['fin']! <= fin);
-      _camposVerdes.add({'inicio': inicio, 'fin': inicio + texto.length});
-      _actualizarController(nuevoTexto, inicio + texto.length);
+      _labelActual = 'A sus órdenes Lic. Adrianayeli';
+      _inputController.clear();
+      _mostrarEnter = false;
+      _tablaEnTurno = null;
+      _carpetaEnTurno = null;
+      _tipoListaEnTurno = '';
+      _modoCreacionTabla = false;
+      _columnasTemp.clear();
+      _columnaIndexActual = 0;
+      _filaIndexActual = 0;
     });
-    _focusNode.requestFocus();
   }
 
-  Map<String, dynamic>? _buscarCampoEnPosicion(int pos) {
-    final text = _controller.text;
-    final RegExp exp = RegExp(r'\{\{([^}]+)\}\}');
-    for (final match in exp.allMatches(text)) {
-      if (pos >= match.start && pos <= match.end) {
-        return {
-          'inicio': match.start,
-          'fin': match.end,
-          'contenido': match.group(1)!.trim()
-        };
-      }
-    }
-    return null;
-  }
-
-  void _pegarFecha() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
-    );
-    if (picked!= null) {
-      String fecha = _formatearFechaLarga(picked);
-
-      bool yaExiste = _fundamentos.any((f) =>
-        f['titulo']!.toUpperCase() == 'FECHA' && f['texto']!.trim() == fecha.trim()
-      );
-
-      if (!yaExiste) {
-        setState(() {
-          _fundamentos.add({
-            'titulo': 'FECHA',
-            'texto': fecha.trim(),
-          });
-        });
-        _guardarFundamentos();
-      }
-
-      _insertarTexto(fecha);
-    }
+  void _agregarAHistorial(String accion, dynamic valor) {
+    _historial.add({
+      'accion': accion,
+      'valor': valor,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
   }
 
   String _formatearFechaLarga(DateTime fecha) {
     final dia = fecha.day;
     final mes = fecha.month;
-
     final diasEnLetra = [
       '', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
       'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
       'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve', 'treinta',
       'treinta y uno'
     ];
-
     final mesesEnLetra = [
       '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
       'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
     ];
-
     final diaDosDigitos = dia.toString().padLeft(2, '0');
     final diaLetra = diasEnLetra[dia];
     final mesLetra = mesesEnLetra[mes];
-
     return '$diaDosDigitos $diaLetra de $mesLetra';
-  }
-
-  void _abrirPaginaFundamentos() async {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-
-    final textoParaInsertar = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FundamentosPage(fundamentos: _fundamentos),
-      ),
-    );
-
-    if (textoParaInsertar!= null && textoParaInsertar.isNotEmpty) {
-      _insertarTexto(textoParaInsertar);
-      _snack('Texto agregado');
-    }
-    _cargarTodo();
-  }
-
-  void _abrirCamaraOCR() async {
-    if (cameras.isEmpty) {
-      _snack('No hay cámaras disponibles');
-      return;
-    }
-
-    final resultado = await Navigator.push<Map<String, String>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CameraScreen(textoAnterior: _textoEscaneadoCompleto),
-      ),
-    );
-
-    if (resultado!= null) {
-      setState(() {
-        _textoEscaneadoCompleto = resultado['completo']!; // PERMANECE HASTA NUEVA FOTO
-        if (resultado['seleccion']!.isNotEmpty) {
-          _insertarTexto(resultado['seleccion']!);
-        }
-      });
-      _guardarTextoEscaneado();
-      if (resultado['seleccion']!.isNotEmpty) {
-        _snack('Campo reemplazado');
-      }
-    }
-  }
-
-  void _insertarTexto(String texto) {
-    final int cursorPos = _controller.selection.baseOffset;
-    final String textoActual = _controller.text;
-    final campo = _buscarCampoEnPosicion(cursorPos);
-
-    if (campo!= null) {
-      final int inicio = campo['inicio']!;
-      final int fin = campo['fin']!;
-      final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
-      final String nombreCampo = campo['contenido'].toUpperCase().trim();
-
-      if ((nombreCampo == 'NOMBRE' || nombreCampo == 'FECHA') && texto.trim().isNotEmpty) {
-        bool yaExiste = _fundamentos.any((f) =>
-          f['titulo']!.toUpperCase() == nombreCampo && f['texto']!.trim() == texto.trim()
-        );
-
-        if (!yaExiste) {
-          setState(() {
-            _fundamentos.add({
-              'titulo': nombreCampo,
-              'texto': texto.trim(),
-            });
-          });
-          _guardarFundamentos();
-        }
-      }
-
-      setState(() {
-        _camposVerdes.removeWhere((r) => r['inicio']! >= inicio && r['fin']! <= fin);
-        _camposVerdes.add({'inicio': inicio, 'fin': inicio + texto.length});
-        _actualizarController(nuevoTexto, inicio + texto.length);
-      });
-    } else {
-      final String nuevoTexto = cursorPos >= 0
-? textoActual.replaceRange(cursorPos, cursorPos, texto)
-        : textoActual + texto;
-      final int nuevaPos = cursorPos >= 0? cursorPos + texto.length : nuevoTexto.length;
-
-      if (cursorPos >= 0) {
-        for (var rango in _camposVerdes) {
-          if (rango['inicio']! >= cursorPos) {
-            rango['inicio'] = rango['inicio']! + texto.length;
-            rango['fin'] = rango['fin']! + texto.length;
-          }
-        }
-      }
-      _actualizarController(nuevoTexto, nuevaPos);
-    }
-  }
-
-  void _actualizarController(String texto, int posCursor) {
-    final seleccionActual = TextSelection.collapsed(offset: posCursor);
-    _controller.removeListener(_checarCampoEnCursor);
-    _controller.removeListener(_guardarTextoPrincipal);
-    _controller.dispose();
-    _controller = ResaltadorController(
-      text: texto,
-      camposVerdes: _camposVerdes
-    );
-    _controller.addListener(_checarCampoEnCursor);
-    _controller.addListener(_guardarTextoPrincipal);
-    _controller.selection = seleccionActual;
-    setState(() {});
-  }
-
-  void _copiarTodo() {
-    Clipboard.setData(ClipboardData(text: _controller.text));
-    _snack('Texto copiado');
-  }
-
-  void _limpiarTexto() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('¿Borrar todo?', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Se va a borrar todo el texto del oficio. ¿Estás seguro?',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('BORRAR', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-      setState(() {
-        _controller.clear();
-        _camposVerdes.clear();
-      });
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_keyTextoPrincipal);
-      _snack('Texto limpiado');
-    }
-  }
-
-  void _mostrarListaEnPantalla(String tipo, List<Map<String, String>> lista) {
-  if (_controller.text.trim().isNotEmpty) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('Primero borra el texto', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Para ver la lista debes borrar el texto con el botón de tachecito',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-    return;
-  }
-
-  String textoLista = lista.map((e) {
-    if (tipo == 'Pedidos') {
-      return 'VOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nFOLIO: ${e['folio']}\nDIRECCIÓN: ${e['direccion']}\nFECHA: ${e['fecha']?? ''}';
-    } else if (tipo == 'Recibidos') {
-      return 'FOLIO: ${e['folio']}\nVOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nDIRECCIÓN: ${e['direccion']}\nFECHA RECIBIDO: ${e['fecha_recibido']?? ''}';
-    } else {
-      return 'FOLIO: ${e['folio']}\nVOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nDIRECCIÓN: ${e['direccion']}\nFECHA: ${e['fecha']?? ''}';
-    }
-  }).join('\n\n─────────────────\n\n');
-
-  setState(() {
-    _actualizarController(textoLista, 0);
-  });
   }
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  void _agregarPedido() async {
-  final volanteCtrl = TextEditingController();
-  final carpetaCtrl = TextEditingController();
-  final folioCtrl = TextEditingController();
-  final direccionCtrl = TextEditingController();
-  final fechaCtrl = TextEditingController(); // NUEVO CAMPO
 
-  // FocusNodes para saber dónde está el cursor
-  final volanteFocus = FocusNode();
-  final carpetaFocus = FocusNode();
-  final folioFocus = FocusNode();
-  final direccionFocus = FocusNode();
-  final fechaFocus = FocusNode();
+  //PARTE 2 ACA ARRIBA
 
-  TextEditingController? _getActiveController() {
-    if (volanteFocus.hasFocus) return volanteCtrl;
-    if (carpetaFocus.hasFocus) return carpetaCtrl;
-    if (folioFocus.hasFocus) return folioCtrl;
-    if (direccionFocus.hasFocus) return direccionCtrl;
-    if (fechaFocus.hasFocus) return fechaCtrl;
-    return null;
+    // ========== MICHI CONSTRUCTOR ==========
+  void _constructorTap() {
+    _mostrarListaTablasYCarpetas();
   }
 
-  void _insertarEnCampoActivo(String texto) {
-    final ctrl = _getActiveController();
-    if (ctrl!= null) {
-      final int pos = ctrl.selection.baseOffset;
-      final String nuevo = ctrl.text.replaceRange(pos >= 0? pos : ctrl.text.length, pos >= 0? pos : ctrl.text.length, texto);
-      ctrl.text = nuevo;
-      ctrl.selection = TextSelection.collapsed(offset: (pos >= 0? pos : ctrl.text.length) + texto.length);
-    }
-  }
-
-  Future<void> _abrirLibritoDialog() async {
-    final texto = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FundamentosPage(fundamentos: _fundamentos),
-      ),
-    );
-    if (texto!= null && texto.isNotEmpty) {
-      _insertarEnCampoActivo(texto);
-    }
-  }
-
-  Future<void> _abrirScannerDialog() async {
-    if (cameras.isEmpty) {
-      _snack('No hay cámaras disponibles');
-      return;
-    }
-    final resultado = await Navigator.push<Map<String, String>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CameraScreen(textoAnterior: _textoEscaneadoCompleto),
-      ),
-    );
-    if (resultado!= null) {
-      setState(() {
-        _textoEscaneadoCompleto = resultado['completo']!;
-      });
-      _guardarTextoEscaneado();
-      if (resultado['seleccion']!.isNotEmpty) {
-        _insertarEnCampoActivo(resultado['seleccion']!);
-      }
-    }
-  }
-
-  Future<void> _pegarFechaDialog() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
-    );
-    if (picked!= null) {
-      String fecha = _formatearFechaLarga(picked);
-      _insertarEnCampoActivo(fecha);
-    }
-  }
-
-  final resultado = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Colors.grey[900],
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Nuevo Pedido', style: TextStyle(color: Colors.white)),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.calendar_month, color: Colors.white70, size: 20),
-                onPressed: _pegarFechaDialog,
-                tooltip: 'Fecha',
-              ),
-              IconButton(
-                icon: const Icon(Icons.menu_book, color: Colors.white70, size: 20),
-                onPressed: _abrirLibritoDialog,
-                tooltip: 'Librito',
-              ),
-              IconButton(
-                icon: const Icon(Icons.camera_alt, color: Colors.white70, size: 20),
-                onPressed: _abrirScannerDialog,
-                tooltip: 'Escanear',
-              ),
-            ],
-          ),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _campoDialog(volanteCtrl, 'VOLANTE', volanteFocus),
-            _campoDialog(carpetaCtrl, 'CARPETA', carpetaFocus),
-            _campoDialog(folioCtrl, 'FOLIO', folioFocus),
-            _campoDialog(direccionCtrl, 'DIRECCIÓN', direccionFocus),
-            _campoDialog(fechaCtrl, 'FECHA', fechaFocus), // NUEVO
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Guardar', style: TextStyle(color: Colors.green)),
-        ),
-      ],
-    ),
-  );
-
-  if (resultado == true) {
+  void _constructorLongPress() {
     setState(() {
-      _pedidos.add({
-        'volante': volanteCtrl.text.trim(),
-        'carpeta': carpetaCtrl.text.trim(),
-        'folio': folioCtrl.text.trim(),
-        'direccion': direccionCtrl.text.trim(),
-        'fecha': fechaCtrl.text.trim(), // NUEVO
-      });
+      _modoCreacionTabla = true;
+      _columnasTemp.clear();
+      _columnaIndexActual = 1;
+      _labelActual = 'columna1';
+      _inputController.clear();
+      _mostrarEnter = true;
     });
-    _guardarPedidos();
+    _agregarAHistorial('iniciar_tabla', null);
   }
 
-  volanteCtrl.dispose();
-  carpetaCtrl.dispose();
-  folioCtrl.dispose();
-  direccionCtrl.dispose();
-  fechaCtrl.dispose();
-  volanteFocus.dispose();
-  carpetaFocus.dispose();
-  folioFocus.dispose();
-  direccionFocus.dispose();
-  fechaFocus.dispose();
-  }
-
-  void _agregarRecibido() async {
-  final folioCtrl = TextEditingController();
-  final fechaCtrl = TextEditingController(); // NUEVO CAMPO
-  final folioFocus = FocusNode();
-  final fechaFocus = FocusNode();
-
-  TextEditingController? _getActiveController() {
-    if (folioFocus.hasFocus) return folioCtrl;
-    if (fechaFocus.hasFocus) return fechaCtrl;
-    return null;
-  }
-
-  void _insertarEnCampoActivo(String texto) {
-    final ctrl = _getActiveController();
-    if (ctrl!= null) {
-      final int pos = ctrl.selection.baseOffset;
-      final String nuevo = ctrl.text.replaceRange(pos >= 0? pos : ctrl.text.length, pos >= 0? pos : ctrl.text.length, texto);
-      ctrl.text = nuevo;
-      ctrl.selection = TextSelection.collapsed(offset: (pos >= 0? pos : ctrl.text.length) + texto.length);
-    }
-  }
-
-  Future<void> _abrirLibritoDialog() async {
-    final texto = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FundamentosPage(fundamentos: _fundamentos),
-      ),
-    );
-    if (texto!= null && texto.isNotEmpty) {
-      _insertarEnCampoActivo(texto);
-    }
-  }
-
-  Future<void> _abrirScannerDialog() async {
-    if (cameras.isEmpty) {
-      _snack('No hay cámaras disponibles');
-      return;
-    }
-    final resultado = await Navigator.push<Map<String, String>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CameraScreen(textoAnterior: _textoEscaneadoCompleto),
-      ),
-    );
-    if (resultado!= null) {
-      setState(() {
-        _textoEscaneadoCompleto = resultado['completo']!;
-      });
-      _guardarTextoEscaneado();
-      if (resultado['seleccion']!.isNotEmpty) {
-        _insertarEnCampoActivo(resultado['seleccion']!);
-      }
-    }
-  }
-
-  Future<void> _pegarFechaDialog() async {
-    DateTime? picked = await showDatePicker(
+  void _mostrarListaTablasYCarpetas() {
+    showModalBottomSheet(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
-    );
-    if (picked!= null) {
-      String fecha = _formatearFechaLarga(picked);
-      _insertarEnCampoActivo(fecha);
-    }
-  }
-
-  final resultado = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
       backgroundColor: Colors.grey[900],
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Nuevo Recibido', style: TextStyle(color: Colors.white)),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.calendar_month, color: Colors.white70, size: 20),
-                onPressed: _pegarFechaDialog,
-                tooltip: 'Fecha',
-              ),
-              IconButton(
-                icon: const Icon(Icons.menu_book, color: Colors.white70, size: 20),
-                onPressed: _abrirLibritoDialog,
-                tooltip: 'Librito',
-              ),
-              IconButton(
-                icon: const Icon(Icons.camera_alt, color: Colors.white70, size: 20),
-                onPressed: _abrirScannerDialog,
-                tooltip: 'Escanear',
-              ),
-            ],
-          ),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _campoDialog(folioCtrl, 'FOLIO', folioFocus),
-            _campoDialog(fechaCtrl, 'FECHA RECIBIDO', fechaFocus), // NUEVO
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Buscar', style: TextStyle(color: Colors.green)),
-        ),
-      ],
-    ),
-  );
-
-  if (resultado == true) {
-    final folio = folioCtrl.text.trim();
-    final pedido = _pedidos.firstWhere(
-      (p) => p['folio'] == folio,
-      orElse: () => {},
-    );
-
-    if (pedido.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.grey[900],
-          title: const Text('Carpeta no pedida', style: TextStyle(color: Colors.red)),
-          content: const Text(
-            'Este folio no está en la lista de pedidos',
-            style: TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      setState(() {
-        _recibidos.add({
-         ...pedido,
-          'fecha_recibido': fechaCtrl.text.trim(), // AGREGA FECHA DE RECIBIDO
-        });
-      });
-      _guardarRecibidos();
-      _snack('Recibido agregado');
-    }
-  }
-
-  folioCtrl.dispose();
-  fechaCtrl.dispose();
-  folioFocus.dispose();
-  fechaFocus.dispose();
-  }
-
-  List<Map<String, String>> _obtenerPendientes() {
-    return _pedidos.where((p) {
-      return!_recibidos.any((r) => r['folio'] == p['folio']);
-    }).toList();
-  }
-
-  Widget _campoDialog(TextEditingController ctrl, String label, [FocusNode? focus]) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: TextField(
-      controller: ctrl,
-      focusNode: focus,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
-        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-      ),
-    ),
-  );
-  }
-
-  void _borrarItem(List<Map<String, String>> lista, int index, VoidCallback guardar) {
-    setState(() {
-      lista.removeAt(index);
-    });
-    guardar();
-  }
-
-  @override
-  void dispose() {
-    _overlayEntry?.remove();
-    _controller.removeListener(_checarCampoEnCursor);
-    _controller.removeListener(_guardarTextoPrincipal);
-    _controller.dispose();
-    _focusNode.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.red[900],
-        title: const Text(''),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
-          IconButton(icon: const Icon(Icons.menu_book), onPressed: _abrirPaginaFundamentos, tooltip: 'Librito'),
-          IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
-          IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTodo, tooltip: 'Copiar'),
-          IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
-          const SizedBox(width: 8),
-        ],
-      ),
-      drawer: Drawer(
-        backgroundColor: Colors.grey[900],
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
         child: ListView(
-          padding: EdgeInsets.zero,
           children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.red[900]!, Colors.green[900]!],
-                ),
-              ),
-              child: const Text(
-                'OFICIOS - MENÚ',
-                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.send, color: Colors.red),
-              title: const Text('Pedidos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              trailing: IconButton(
-                icon: const Icon(Icons.add_circle, color: Colors.green),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _agregarPedido();
-                },
-              ),
+            const Text('TABLAS EXISTENTES', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+           ..._tablas.map((tabla) => ListTile(
+              title: Text(tabla.nombre, style: const TextStyle(color: Colors.white)),
               onTap: () {
                 Navigator.pop(context);
-                _mostrarListaEnPantalla('Pedidos', _pedidos);
+                _abrirTablaParaEditar(tabla);
               },
-            ),
-            if (_pedidos.isNotEmpty)
-           ..._pedidos.asMap().entries.map((e) => ListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.only(left: 72, right: 16),
-                title: Text(
-                  'FOLIO: ${e.value['folio']}',
-                  style: const TextStyle(color: Colors.green, fontSize: 12),
-                ),
-                subtitle: Text(
-                  'CARPETA: ${e.value['carpeta']}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-                  onPressed: () => _borrarItem(_pedidos, e.key, _guardarPedidos),
-                ),
-              )),
+            )),
             const Divider(color: Colors.white24),
-            ListTile(
-              leading: const Icon(Icons.inbox, color: Colors.green),
-              title: const Text('Recibidos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              trailing: IconButton(
-                icon: const Icon(Icons.add_circle, color: Colors.red),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _agregarRecibido();
-                },
-              ),
+            const Text('CARPETAS PEDIDAS', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+           ..._carpetasPedidas.asMap().entries.map((e) => ListTile(
+              title: Text('FOLIO: ${e.value.folio}', style: const TextStyle(color: Colors.white)),
+              subtitle: Text('CARPETA: ${e.value.carpeta}', style: const TextStyle(color: Colors.white70)),
               onTap: () {
                 Navigator.pop(context);
-                _mostrarListaEnPantalla('Recibidos', _recibidos);
+                _abrirCarpetaParaEditar(e.value, 'pedidas', e.key);
               },
-            ),
-            if (_recibidos.isNotEmpty)
-           ..._recibidos.asMap().entries.map((e) => ListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.only(left: 72, right: 16),
-                title: Text(
-                  'FOLIO: ${e.value['folio']}',
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-                subtitle: Text(
-                  'CARPETA: ${e.value['carpeta']}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.green, size: 18),
-                  onPressed: () => _borrarItem(_recibidos, e.key, _guardarRecibidos),
-                ),
-              )),
-            const Divider(color: Colors.white24),
-            ListTile(
-              leading: const Icon(Icons.pending_actions, color: Colors.yellow),
-              title: const Text('Pendientes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )),
+            const Text('CARPETAS RECIBIDAS', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+           ..._carpetasRecibidas.asMap().entries.map((e) => ListTile(
+              title: Text('FOLIO: ${e.value.folio}', style: const TextStyle(color: Colors.white)),
+              subtitle: Text('CARPETA: ${e.value.carpeta}', style: const TextStyle(color: Colors.white70)),
               onTap: () {
                 Navigator.pop(context);
-                _mostrarListaEnPantalla('Pendientes', _obtenerPendientes());
+                _abrirCarpetaParaEditar(e.value, 'recibidas', e.key);
               },
-            ),
+            )),
+            const Text('CARPETAS PENDIENTES', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+           ..._carpetasPendientes.asMap().entries.map((e) => ListTile(
+              title: Text('FOLIO: ${e.value.folio}', style: const TextStyle(color: Colors.white)),
+              subtitle: Text('CARPETA: ${e.value.carpeta}', style: const TextStyle(color: Colors.white70)),
+              onTap: () {
+                Navigator.pop(context);
+                _abrirCarpetaParaEditar(e.value, 'pendientes', e.key);
+              },
+            )),
           ],
-        ),
-      ),
-      body: Container(
-        margin: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.red[900]!),
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF0A0A0A),
-        ),
-        child: TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          scrollController: _scrollController,
-          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-          cursorColor: Colors.red,
-          maxLines: null,
-          expands: true,
-          textAlignVertical: TextAlignVertical.top,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.all(12),
-            hintText: 'Pega tu texto aquí...',
-            hintStyle: TextStyle(color: Colors.white38),
-          ),
         ),
       ),
     );
   }
-}
 
-class FundamentosPage extends StatefulWidget {
-  final List<Map<String, String>> fundamentos;
-  const FundamentosPage({required this.fundamentos, super.key});
-
-  @override
-  State<FundamentosPage> createState() => _FundamentosPageState();
-}
-
-class _FundamentosPageState extends State<FundamentosPage> {
-  final TextEditingController _inputCtrl = TextEditingController();
-  late List<Map<String, String>> _funds;
-  Set<int> _seleccionados = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _funds = List.from(widget.fundamentos);
-  }
-
-  Future<void> _guardar() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fundamentos_v2', json.encode(_funds));
-  }
-
-  void _procesarTextoPegado() {
-    if (_inputCtrl.text.trim().isEmpty) return;
-
-    final bloques = _inputCtrl.text.split(RegExp(r'\n\s*\n'));
-
+  void _abrirTablaParaEditar(TablaMichi tabla) {
     setState(() {
-      for (var bloque in bloques) {
-        final lineas = bloque.trim().split('\n');
-        if (lineas.isNotEmpty) {
-          final titulo = lineas[0].trim();
-          final texto = lineas.length > 1? lineas.sublist(1).join('\n').trim() : '';
-          if (titulo.isNotEmpty) {
-            _funds.add({'titulo': titulo, 'texto': texto});
-          }
-        }
+      _tablaEnTurno = tabla;
+      _filaIndexActual = 0;
+      _columnaIndexActual = 0;
+      if (tabla.columnas.isNotEmpty && tabla.filas.isNotEmpty) {
+        _labelActual = tabla.columnas[0];
+        _inputController.text = tabla.filas[0][0];
       }
-      _inputCtrl.clear();
+      _mostrarEnter = true;
     });
-    _guardar();
+    _agregarAHistorial('abrir_tabla', tabla.id);
   }
 
-  void _toggleSeleccion(int index) {
+  void _abrirCarpetaParaEditar(CarpetaMichi carpeta, String tipo, int index) {
     setState(() {
-      if (_seleccionados.contains(index)) {
-        _seleccionados.remove(index);
-      } else {
-        _seleccionados.add(index);
+      _carpetaEnTurno = carpeta;
+      _tipoListaEnTurno = tipo;
+      _columnaIndexActual = 0;
+      _mostrarEnter = true;
+      _actualizarBarraCarpeta();
+    });
+    _agregarAHistorial('abrir_carpeta', {'tipo': tipo, 'index': index});
+  }
+
+  void _actualizarBarraCarpeta() {
+    if (_carpetaEnTurno == null) return;
+    final campos = ['Carpeta', 'Volante', 'Folio', 'Dirección', 'Fecha'];
+    final valores = [
+      _carpetaEnTurno!.carpeta,
+      _carpetaEnTurno!.volante,
+      _carpetaEnTurno!.folio,
+      _carpetaEnTurno!.direccion,
+      _carpetaEnTurno!.fecha,
+    ];
+    if (_columnaIndexActual < campos.length) {
+      setState(() {
+        _labelActual = campos[_columnaIndexActual];
+        _inputController.text = valores[_columnaIndexActual];
+      });
+    }
+  }
+
+  // ========== MICHI INSPECTOR ==========
+  void _inspectorTap() async {
+    if (cameras.isEmpty) {
+      _snack('No hay cámaras disponibles');
+      return;
+    }
+    final resultado = await Navigator.push<Map<String, String>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CameraScreen(textoAnterior: ''),
+      ),
+    );
+    if (resultado!= null && resultado['completo']!.isNotEmpty) {
+      setState(() {
+        _datosEscaneados.add(resultado['completo']!);
+      });
+      _guardarEscaneados();
+      _snack('Texto escaneado guardado');
+      if (_tablaEnTurno!= null || _carpetaEnTurno!= null) {
+        _intentarRellenarCampos(resultado['completo']!);
       }
-    });
+    }
   }
 
-  void _limpiarSeleccion() {
-    setState(() {
-      _seleccionados.clear();
-    });
+  void _inspectorLongPress() {
+    _mostrarListaDatosEscaneados();
   }
 
-  void _insertarSeleccionados() {
-    if (_seleccionados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona al menos 1 párrafo')),
-      );
+  void _mostrarListaDatosEscaneados() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text('DATOS ESCANEADOS', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _datosEscaneados.length,
+                itemBuilder: (context, i) => ListTile(
+                  title: Text(
+                    _datosEscaneados[i].length > 50
+                     ? '${_datosEscaneados[i].substring(0, 50)}...'
+                      : _datosEscaneados[i],
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _inputController.text = _datosEscaneados[i];
+                    _agregarAHistorial('pegar_escaneado', i);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _intentarRellenarCampos(String textoEscaneado) {
+    // Lógica básica: si hay tabla activa, intenta mapear
+    _snack('Datos encontrados: procesando...');
+  }
+
+  // ========== MICHI GODÍNEZ ==========
+  void _godinezTap() {
+    FocusScope.of(context).requestFocus(FocusNode());
+    SystemChannels.textInput.invokeMethod('TextInput.show');
+    _agregarAHistorial('teclado', null);
+  }
+
+  void _godinezLongPress() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
+    );
+    if (picked!= null) {
+      String fecha = _formatearFechaLarga(picked);
+      _inputController.text = fecha;
+      _agregarAHistorial('fecha', fecha);
+    }
+  }
+
+  // ========== BOTÓN ENTER DE LA BARRA ==========
+  void _onEnterPressed() {
+    if (_modoCreacionTabla) {
+      _avanzarCreacionTabla();
+    } else if (_tablaEnTurno!= null) {
+      _avanzarEdicionTabla();
+    } else if (_carpetaEnTurno!= null) {
+      _avanzarEdicionCarpeta();
+    }
+  }
+
+  void _avanzarCreacionTabla() {
+    final nombreCol = _inputController.text.trim();
+    if (nombreCol.isNotEmpty) {
+      _columnasTemp.add(nombreCol);
+    } else {
+      _columnasTemp.add('columna${_columnaIndexActual}');
+    }
+
+    if (_columnaIndexActual >= 22) {
+      _snack('Máximo 22 columnas');
       return;
     }
 
-    final textos = _seleccionados.map((i) {
-      final f = _funds[i];
-      return f['texto']!;
-    }).join('\n\n');
-
-    Navigator.pop(context, textos);
+    setState(() {
+      _columnaIndexActual++;
+      _labelActual = 'columna$_columnaIndexActual';
+      _inputController.clear();
+    });
   }
 
-  void _editarFund(int index) async {
-    final fund = _funds[index];
-    final tituloCtrl = TextEditingController(text: fund['titulo']);
-    final textoCtrl = TextEditingController(text: fund['texto']);
+  void _avanzarEdicionTabla() {
+    if (_tablaEnTurno == null) return;
 
+    // Guardar valor actual
+    if (_filaIndexActual < _tablaEnTurno!.filas.length &&
+        _columnaIndexActual < _tablaEnTurno!.columnas.length) {
+      _tablaEnTurno!.filas[_filaIndexActual][_columnaIndexActual] = _inputController.text;
+    }
+
+    // Avanzar al siguiente
+    _columnaIndexActual++;
+    if (_columnaIndexActual >= _tablaEnTurno!.columnas.length) {
+      _columnaIndexActual = 0;
+      _filaIndexActual++;
+      if (_filaIndexActual >= _tablaEnTurno!.filas.length) {
+        _snack('Fin de tabla');
+        _resetearBarraSuperior();
+        return;
+      }
+    }
+
+    setState(() {
+      _labelActual = _tablaEnTurno!.columnas[_columnaIndexActual];
+      _inputController.text = _tablaEnTurno!.filas[_filaIndexActual][_columnaIndexActual];
+    });
+    _guardarTablas();
+  }
+
+  void _avanzarEdicionCarpeta() {
+    if (_carpetaEnTurno == null) return;
+
+    // Guardar valor actual en carpeta
+    final campos = ['carpeta', 'volante', 'folio', 'direccion', 'fecha'];
+    if (_columnaIndexActual < campos.length) {
+      // Actualizar carpeta en turno
+      _actualizarCampoCarpeta(campos[_columnaIndexActual], _inputController.text);
+    }
+
+    _columnaIndexActual++;
+    if (_columnaIndexActual >= 5) {
+      _snack('Fin de carpeta');
+      _guardarCarpetas(_tipoListaEnTurno);
+      _resetearBarraSuperior();
+      return;
+    }
+
+    _actualizarBarraCarpeta();
+  }
+
+  void _actualizarCampoCarpeta(String campo, String valor) {
+    if (_carpetaEnTurno == null) return;
+    CarpetaMichi actualizada;
+    switch (campo) {
+      case 'carpeta':
+        actualizada = CarpetaMichi(
+          carpeta: valor,
+          volante: _carpetaEnTurno!.volante,
+          folio: _carpetaEnTurno!.folio,
+          direccion: _carpetaEnTurno!.direccion,
+          fecha: _carpetaEnTurno!.fecha,
+          fechaRecibido: _carpetaEnTurno!.fechaRecibido,
+        );
+        break;
+      case 'volante':
+        actualizada = CarpetaMichi(
+          carpeta: _carpetaEnTurno!.carpeta,
+          volante: valor,
+          folio: _carpetaEnTurno!.folio,
+          direccion: _carpetaEnTurno!.direccion,
+          fecha: _carpetaEnTurno!.fecha,
+          fechaRecibido: _carpetaEnTurno!.fechaRecibido,
+        );
+        break;
+      case 'folio':
+        actualizada = CarpetaMichi(
+          carpeta: _carpetaEnTurno!.carpeta,
+          volante: _carpetaEnTurno!.volante,
+          folio: valor,
+          direccion: _carpetaEnTurno!.direccion,
+          fecha: _carpetaEnTurno!.fecha,
+          fechaRecibido: _carpetaEnTurno!.fechaRecibido,
+        );
+        break;
+      case 'direccion':
+        actualizada = CarpetaMichi(
+          carpeta: _carpetaEnTurno!.carpeta,
+          volante: _carpetaEnTurno!.volante,
+          folio: _carpetaEnTurno!.folio,
+          direccion: valor,
+          fecha: _carpetaEnTurno!.fecha,
+          fechaRecibido: _carpetaEnTurno!.fechaRecibido,
+        );
+        break;
+      case 'fecha':
+        actualizada = CarpetaMichi(
+          carpeta: _carpetaEnTurno!.carpeta,
+          volante: _carpetaEnTurno!.volante,
+          folio: _carpetaEnTurno!.folio,
+          direccion: _carpetaEnTurno!.direccion,
+          fecha: valor,
+          fechaRecibido: _carpetaEnTurno!.fechaRecibido,
+        );
+        break;
+      default:
+        actualizada = _carpetaEnTurno!;
+    }
+    setState(() {
+      _carpetaEnTurno = actualizada;
+    });
+  }
+
+
+  //PARTE 3 ACA ARRIBA
+
+    // ========== MICHI BANQUERO ==========
+  void _banqueroTap() {
+    _mostrarPaginaSecundariaDatos();
+  }
+
+  void _banqueroLongPress() {
+    if (_modoCreacionTabla) {
+      _guardarTablaNueva();
+    } else if (_tablaEnTurno!= null) {
+      _guardarTablas();
+      _snack('Tabla guardada');
+      _resetearBarraSuperior();
+    } else if (_carpetaEnTurno!= null) {
+      _guardarCarpetas(_tipoListaEnTurno);
+      _snack('Carpeta guardada');
+      _resetearBarraSuperior();
+    } else {
+      _snack('Nada que guardar');
+    }
+  }
+
+  void _guardarTablaNueva() async {
+    final nombreCtrl = TextEditingController();
     final resultado = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text('Editar', style: TextStyle(color: Colors.white)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: tituloCtrl,
-                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                decoration: const InputDecoration(
-                  labelText: 'TÍTULO',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: textoCtrl,
-                style: const TextStyle(color: Colors.white),
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Texto',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
-                ),
-              ),
-            ],
+        title: const Text('Nombre de tabla', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: nombreCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'Nombre',
+            labelStyle: TextStyle(color: Colors.white70),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
           ),
         ),
         actions: [
@@ -1183,30 +648,326 @@ class _FundamentosPageState extends State<FundamentosPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Guardar', style: TextStyle(color: Colors.red)),
+            child: const Text('Guardar', style: TextStyle(color: Colors.green)),
           ),
         ],
       ),
     );
 
-    if (resultado == true) {
+    if (resultado == true && nombreCtrl.text.trim().isNotEmpty) {
+      final nuevaTabla = TablaMichi(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        nombre: nombreCtrl.text.trim(),
+        columnas: List.from(_columnasTemp),
+        filas: [List.filled(_columnasTemp.length, '')],
+      );
       setState(() {
-        _funds[index] = {
-          'titulo': tituloCtrl.text.trim(),
-          'texto': textoCtrl.text.trim(),
-        };
+        _tablas.add(nuevaTabla);
       });
-      _guardar();
+      _guardarTablas();
+      _snack('Tabla creada');
+      _resetearBarraSuperior();
     }
+    nombreCtrl.dispose();
+  }
 
-    tituloCtrl.dispose();
-    textoCtrl.dispose();
+  void _mostrarPaginaSecundariaDatos() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PaginaSecundariaDatos(
+          tablas: _tablas,
+          pedidas: _carpetasPedidas,
+          recibidas: _carpetasRecibidas,
+          pendientes: _carpetasPendientes,
+        ),
+      ),
+    );
+  }
+
+  // ========== MICHI BARRENDERO ==========
+  void _barrenderoTap() {
+    if (_labelActual == 'A sus órdenes Lic. Adrianayeli') {
+      _snack('Nada que borrar');
+      return;
+    }
+    final valorBorrado = '${_labelActual}: ${_inputController.text}';
+    setState(() {
+      _papelera.add(valorBorrado);
+      _inputController.clear();
+    });
+    _guardarPapelera();
+    _agregarAHistorial('borrar_campo', valorBorrado);
+    _snack('Campo borrado');
+  }
+
+  void _barrenderoLongPress() async {
+    if (_tablaEnTurno!= null) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('¿Borrar tabla completa?', style: TextStyle(color: Colors.red)),
+          content: Text('Se borrará: ${_tablaEnTurno!.nombre}', style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('BORRAR', style: TextStyle(color: Colors.red))),
+          ],
+        ),
+      );
+      if (confirmar == true) {
+        setState(() {
+          _tablas.removeWhere((t) => t.id == _tablaEnTurno!.id);
+          _papelera.add('TABLA: ${_tablaEnTurno!.nombre}');
+        });
+        _guardarTablas();
+        _guardarPapelera();
+        _resetearBarraSuperior();
+        _snack('Tabla borrada');
+      }
+    } else if (_carpetaEnTurno!= null) {
+      _snack('Borrando carpeta...');
+      // Lógica para borrar carpeta según tipo
+      _resetearBarraSuperior();
+    } else {
+      _snack('Nada seleccionado');
+    }
+  }
+
+  // ========== MICHI MAGO ==========
+  void _magoTap() {
+    if (_historial.isEmpty) {
+      _snack('No hay acciones para deshacer');
+      return;
+    }
+    final ultimaAccion = _historial.removeLast();
+    _snack('Deshecho: ${ultimaAccion['accion']}');
+    // Aquí iría lógica específica de deshacer según acción
+  }
+
+  void _magoLongPress() {
+    _mostrarPapelera();
+  }
+
+  void _mostrarPapelera() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text('PAPELERA', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 18)),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _papelera.length,
+                itemBuilder: (context, i) => ListTile(
+                  title: Text(_papelera[i], style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.restore, color: Colors.green, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _inputController.text = _papelera[i];
+                            _papelera.removeAt(i);
+                          });
+                          _guardarPapelera();
+                          Navigator.pop(context);
+                          _snack('Restaurado');
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _papelera.removeAt(i);
+                          });
+                          _guardarPapelera();
+                          _snack('Eliminado definitivamente');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CERRAR'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _inputCtrl.dispose();
+    _inputController.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // BARRA SUPERIOR DINÁMICA
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.red[900],
+              child: _labelActual == 'A sus órdenes Lic. Adrianayeli'
+              ? Center(
+                    child: Text(
+                      _labelActual,
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          _labelActual,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 5,
+                        child: TextField(
+                          controller: _inputController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ),
+                      if (_mostrarEnter)...[
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[900]),
+                          onPressed: _onEnterPressed,
+                          child: const Icon(Icons.keyboard_return, color: Colors.white),
+                        ),
+                      ],
+                    ],
+                  ),
+            ),
+            // ÁREA CENTRAL VACÍA
+            Expanded(
+              child: Container(
+                color: const Color(0xFF0A0A0A),
+                child: Center(
+                  child: Text(
+                    _tablaEnTurno!= null
+                    ? 'Editando: ${_tablaEnTurno!.nombre}'
+                      : _carpetaEnTurno!= null
+                    ? 'Editando carpeta: ${_carpetaEnTurno!.folio}'
+                          : '',
+                    style: const TextStyle(color: Colors.white24, fontSize: 16),
+                  ),
+                ),
+              ),
+            ),
+            // LOS 6 GATOS ABAJO
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              color: Colors.grey[900],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildGatoBoton('🕵️', 'Inspector', _inspectorTap, _inspectorLongPress),
+                  _buildGatoBoton('👨‍💼', 'Godínez', _godinezTap, _godinezLongPress),
+                  _buildGatoBoton('🏦', 'Banquero', _banqueroTap, _banqueroLongPress),
+                  _buildGatoBoton('🧹', 'Barrendero', _barrenderoTap, _barrenderoLongPress),
+                  _buildGatoBoton('🧙‍♂️', 'Mago', _magoTap, _magoLongPress),
+                  _buildGatoBoton('👷‍♂️', 'Constructor', _constructorTap, _constructorLongPress),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGatoBoton(String emoji, String nombre, VoidCallback onTap, VoidCallback onLongPress) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 40)),
+          const SizedBox(height: 4),
+          Text(nombre, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
+// PÁGINA SECUNDARIA PARA MOSTRAR/COPIAR DATOS
+class PaginaSecundariaDatos extends StatefulWidget {
+  final List<TablaMichi> tablas;
+  final List<CarpetaMichi> pedidas;
+  final List<CarpetaMichi> recibidas;
+  final List<CarpetaMichi> pendientes;
+
+  const PaginaSecundariaDatos({
+    required this.tablas,
+    required this.pedidas,
+    required this.recibidas,
+    required this.pendientes,
+    super.key,
+  });
+
+  @override
+  State<PaginaSecundariaDatos> createState() => _PaginaSecundariaDatosState();
+}
+
+class _PaginaSecundariaDatosState extends State<PaginaSecundariaDatos> {
+  String _textoCompleto = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _generarTexto();
+  }
+
+  void _generarTexto() {
+    final buffer = StringBuffer();
+    for (var tabla in widget.tablas) {
+      buffer.writeln('TABLA: ${tabla.nombre}');
+      buffer.writeln(tabla.columnas.join('\t'));
+      for (var fila in tabla.filas) {
+        buffer.writeln(fila.join('\t'));
+      }
+      buffer.writeln('');
+    }
+    setState(() {
+      _textoCompleto = buffer.toString();
+    });
+  }
+
+  void _copiarTexto() {
+    Clipboard.setData(ClipboardData(text: _textoCompleto));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copiado')));
+  }
+
+  void _limpiarPagina() {
+    setState(() {
+      _textoCompleto = '';
+    });
   }
 
   @override
@@ -1215,97 +976,28 @@ class _FundamentosPageState extends State<FundamentosPage> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('LIBRITO'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.cleaning_services),
-            onPressed: _limpiarSeleccion,
-            tooltip: 'Quitar selección',
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _insertarSeleccionados,
-            tooltip: 'Insertar seleccionados',
-          ),
+          IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarPagina),
+          IconButton(icon: const Icon(Icons.table_chart), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.copy), onPressed: _copiarTexto),
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.red[900]!),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _inputCtrl,
-                  style: const TextStyle(color: Colors.white),
-                  maxLines: 6,
-                  decoration: const InputDecoration(
-                    hintText: 'CALIDAD\nimputado\n\nCALIDAD\ndetenido\n\nRECEPCIÓN\nSe recibió...',
-                    hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                    border: InputBorder.none,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
-                  onPressed: _procesarTextoPegado,
-                  child: const Text('GUARDAR EN LIBRITO'),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _funds.length,
-              itemBuilder: (context, i) {
-                final fund = _funds[i];
-                final estaSeleccionado = _seleccionados.contains(i);
-                return GestureDetector(
-                  onTap: () => _toggleSeleccion(i),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: estaSeleccionado? Colors.blue[900]!.withOpacity(0.3) : Colors.grey[900],
-                      border: Border.all(
-                        color: estaSeleccionado? Colors.blue : Colors.transparent,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ListTile(
-                      title: Text(
-                        fund['titulo']!,
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        fund['texto']!,
-                        style: TextStyle(
-                          color: estaSeleccionado? Colors.blue[200] : Colors.white70,
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _editarFund(i),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+      body: Container(
+        padding: const EdgeInsets.all(12),
+        child: SelectableText(
+          _textoCompleto,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
       ),
     );
   }
 }
 
+// CÁMARA SCREEN - REUTILIZADA
 class CameraScreen extends StatefulWidget {
   final String textoAnterior;
   const CameraScreen({super.key, required this.textoAnterior});
@@ -1330,7 +1022,6 @@ class _CameraScreenState extends State<CameraScreen> {
     _initializeControllerFuture = _controller.initialize();
     _textoController.text = widget.textoAnterior;
     _textoCompleto = widget.textoAnterior;
-    // Si ya hay texto anterior, mostrarlo directo pa sacar más datos
     if (widget.textoAnterior.isNotEmpty) {
       _fotoTomada = true;
     }
@@ -1357,11 +1048,9 @@ class _CameraScreenState extends State<CameraScreen> {
   void _pegarSeleccionYCerrar() {
     final seleccion = _textoController.selection;
     String textoAPegar = '';
-
     if (seleccion.isValid &&!seleccion.isCollapsed) {
       textoAPegar = seleccion.textInside(_textoController.text);
     }
-
     Navigator.pop(context, {
       'completo': _textoCompleto,
       'seleccion': textoAPegar,
@@ -1382,13 +1071,12 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('Escanear y seleccionar'),
+        title: const Text('Escanear'),
         actions: [
           if (_fotoTomada)
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: _pegarSeleccionYCerrar,
-              tooltip: 'Pegar selección',
             ),
         ],
       ),
@@ -1403,14 +1091,13 @@ class _CameraScreenState extends State<CameraScreen> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Selecciona texto con el dedo y pica +',
+                          'Selecciona texto y pica +',
                           style: TextStyle(color: Colors.white70, fontSize: 14),
                         ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.camera_alt, color: Colors.red),
                         onPressed: () => setState(() => _fotoTomada = false),
-                        tooltip: 'Tomar otra foto',
                       ),
                     ],
                   ),
@@ -1456,7 +1143,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       backgroundColor: Colors.red[900],
                       onPressed: _procesando? null : _escanearTexto,
                       child: _procesando
-                     ? const CircularProgressIndicator(color: Colors.white)
+                      ? const CircularProgressIndicator(color: Colors.white)
                           : const Icon(Icons.camera, size: 32),
                     ),
                   ),
@@ -1466,3 +1153,4 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
+
