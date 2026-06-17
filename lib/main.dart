@@ -515,38 +515,40 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _mostrarListaEnPantalla(String tipo, List<Map<String, String>> lista) {
-    if (_controller.text.trim().isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.grey[900],
-          title: const Text('Primero borra el texto', style: TextStyle(color: Colors.white)),
-          content: const Text(
-            'Para ver la lista debes borrar el texto con el botón de tachecito',
-            style: TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(color: Colors.red)),
-            ),
-          ],
+  if (_controller.text.trim().isNotEmpty) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Primero borra el texto', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Para ver la lista debes borrar el texto con el botón de tachecito',
+          style: TextStyle(color: Colors.white70),
         ),
-      );
-      return;
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+
+  String textoLista = lista.map((e) {
+    if (tipo == 'Pedidos') {
+      return 'VOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nFOLIO: ${e['folio']}\nDIRECCIÓN: ${e['direccion']}\nFECHA: ${e['fecha']?? ''}';
+    } else if (tipo == 'Recibidos') {
+      return 'FOLIO: ${e['folio']}\nVOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nDIRECCIÓN: ${e['direccion']}\nFECHA RECIBIDO: ${e['fecha_recibido']?? ''}';
+    } else {
+      return 'FOLIO: ${e['folio']}\nVOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nDIRECCIÓN: ${e['direccion']}\nFECHA: ${e['fecha']?? ''}';
     }
+  }).join('\n\n─────────────────\n\n');
 
-    String textoLista = lista.map((e) {
-      if (tipo == 'Pedidos') {
-        return 'VOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nFOLIO: ${e['folio']}\nDIRECCIÓN: ${e['direccion']}';
-      } else {
-        return 'FOLIO: ${e['folio']}\nVOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nDIRECCIÓN: ${e['direccion']}';
-      }
-    }).join('\n\n─────────────────\n\n');
-
-    setState(() {
-      _actualizarController(textoLista, 0);
-    });
+  setState(() {
+    _actualizarController(textoLista, 0);
+  });
   }
 
   void _snack(String msg) {
