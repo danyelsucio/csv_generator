@@ -714,62 +714,167 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _agregarRecibido() async {
-    final folioCtrl = TextEditingController();
+  final folioCtrl = TextEditingController();
+  final fechaCtrl = TextEditingController(); // NUEVO CAMPO
+  final folioFocus = FocusNode();
+  final fechaFocus = FocusNode();
 
-    final resultado = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('Nuevo Recibido', style: TextStyle(color: Colors.white)),
-        content: _campoDialog(folioCtrl, 'FOLIO'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Buscar', style: TextStyle(color: Colors.green)),
-          ),
-        ],
+  TextEditingController? _getActiveController() {
+    if (folioFocus.hasFocus) return folioCtrl;
+    if (fechaFocus.hasFocus) return fechaCtrl;
+    return null;
+  }
+
+  void _insertarEnCampoActivo(String texto) {
+    final ctrl = _getActiveController();
+    if (ctrl!= null) {
+      final int pos = ctrl.selection.baseOffset;
+      final String nuevo = ctrl.text.replaceRange(pos >= 0? pos : ctrl.text.length, pos >= 0? pos : ctrl.text.length, texto);
+      ctrl.text = nuevo;
+      ctrl.selection = TextSelection.collapsed(offset: (pos >= 0? pos : ctrl.text.length) + texto.length);
+    }
+  }
+
+  Future<void> _abrirLibritoDialog() async {
+    final texto = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FundamentosPage(fundamentos: _fundamentos),
       ),
     );
+    if (texto!= null && texto.isNotEmpty) {
+      _insertarEnCampoActivo(texto);
+    }
+  }
 
-    if (resultado == true) {
-      final folio = folioCtrl.text.trim();
-      final pedido = _pedidos.firstWhere(
-        (p) => p['folio'] == folio,
-        orElse: () => {},
-      );
+  Future<void> _abrirScannerDialog() async {
+    if (cameras.isEmpty) {
+      _snack('No hay cámaras disponibles');
+      return;
+    }
+    final resultado = await Navigator.push<Map<String, String>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CameraScreen(textoAnterior: _textoEscaneadoCompleto),
+      ),
+    );
+    if (resultado!= null) {
+      setState(() {
+        _textoEscaneadoCompleto = resultado['completo']!;
+      });
+      _guardarTextoEscaneado();
+      if (resultado['seleccion']!.isNotEmpty) {
+        _insertarEnCampoActivo(resultado['seleccion']!);
+      }
+    }
+  }
 
-      if (pedido.isEmpty) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: Colors.grey[900],
-            title: const Text('Carpeta no pedida', style: TextStyle(color: Colors.red)),
-            content: const Text(
-              'Este folio no está en la lista de pedidos',
-              style: TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK', style: TextStyle(color: Colors.red)),
+  Future<void> _pegarFechaDialog() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) => Theme(data: ThemeData.dark(), child: child!),
+    );
+    if (picked!= null) {
+      String fecha = _formatearFechaLarga(picked);
+      _insertarEnCampoActivo(fecha);
+    }
+  }
+
+  final resultado = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.grey[900],
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Nuevo Recibido', style: TextStyle(color: Colors.white)),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.calendar_month, color: Colors.white70, size: 20),
+                onPressed: _pegarFechaDialog,
+                tooltip: 'Fecha',
+              ),
+              IconButton(
+                icon: const Icon(Icons.menu_book, color: Colors.white70, size: 20),
+                onPressed: _abrirLibritoDialog,
+                tooltip: 'Librito',
+              ),
+              IconButton(
+                icon: const Icon(Icons.camera_alt, color: Colors.white70, size: 20),
+                onPressed: _abrirScannerDialog,
+                tooltip: 'Escanear',
               ),
             ],
           ),
-        );
-      } else {
-        setState(() {
-          _recibidos.add(pedido);
-        });
-        _guardarRecibidos();
-        _snack('Recibido agregado');
-      }
-    }
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _campoDialog(folioCtrl, 'FOLIO', folioFocus),
+            _campoDialog(fechaCtrl, 'FECHA RECIBIDO', fechaFocus), // NUEVO
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Buscar', style: TextStyle(color: Colors.green)),
+        ),
+      ],
+    ),
+  );
 
-    folioCtrl.dispose();
+  if (resultado == true) {
+    final folio = folioCtrl.text.trim();
+    final pedido = _pedidos.firstWhere(
+      (p) => p['folio'] == folio,
+      orElse: () => {},
+    );
+
+    if (pedido.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('Carpeta no pedida', style: TextStyle(color: Colors.red)),
+          content: const Text(
+            'Este folio no está en la lista de pedidos',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      setState(() {
+        _recibidos.add({
+         ...pedido,
+          'fecha_recibido': fechaCtrl.text.trim(), // AGREGA FECHA DE RECIBIDO
+        });
+      });
+      _guardarRecibidos();
+      _snack('Recibido agregado');
+    }
+  }
+
+  folioCtrl.dispose();
+  fechaCtrl.dispose();
+  folioFocus.dispose();
+  fechaFocus.dispose();
   }
 
   List<Map<String, String>> _obtenerPendientes() {
