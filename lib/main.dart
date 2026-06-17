@@ -51,39 +51,46 @@ class ResaltadorController extends TextEditingController {
       );
     }
 
-    List<bool> pintado = List.filled(text.length, false);
+    // 1. Marcamos qué rangos son verdes
+    List<bool> esVerde = List.filled(text.length, false);
     for (var rango in camposVerdes) {
       int ini = rango['inicio']!;
       int fin = rango['fin']!;
       if (ini >= 0 && fin <= text.length && ini < fin) {
-        for (int i = ini; i < fin; i++) pintado[i] = true;
+        for (int i = ini; i < fin; i++) esVerde[i] = true;
       }
     }
 
+    // 2. Recorremos letra por letra: ROJO tiene prioridad sobre VERDE
     int i = 0;
     while (i < text.length) {
-      if (pintado[i]) {
-        int start = i;
-        while (i < text.length && pintado[i]) i++;
-        spans.add(TextSpan(
-          text: text.substring(start, i),
-          style: baseStyle.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
-        ));
-      } else if (i + 1 < text.length && text[i] == '{' && text[i + 1] == '{') {
+      // PRIORIDAD 1: {{}} SIEMPRE ROJO aunque esté en rango verde
+      if (i + 1 < text.length && text[i] == '{' && text[i + 1] == '{') {
         int start = i;
         int end = text.indexOf('}}', i);
         if (end!= -1) {
           end += 2;
           spans.add(TextSpan(
             text: text.substring(start, end),
-            style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold), // SIEMPRE ROJO
+            style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
           ));
           i = end;
-        } else {
-          spans.add(TextSpan(text: text[i], style: baseStyle));
+          continue;
+        }
+      }
+
+      // PRIORIDAD 2: Si es verde y no es {{}}
+      if (esVerde[i]) {
+        int start = i;
+        while (i < text.length && esVerde[i] &&!(i + 1 < text.length && text[i] == '{' && text[i + 1] == '{')) {
           i++;
         }
+        spans.add(TextSpan(
+          text: text.substring(start, i),
+          style: baseStyle.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
+        ));
       } else {
+        // Texto normal
         spans.add(TextSpan(text: text[i], style: baseStyle));
         i++;
       }
@@ -92,6 +99,8 @@ class ResaltadorController extends TextEditingController {
     return TextSpan(children: spans);
   }
 }
+
+  
 
 class _OficiosPageState extends State<OficiosPage> {
   List<Map<String, String>> _fundamentos = [];
@@ -703,7 +712,7 @@ class _OficiosPageState extends State<OficiosPage> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('OFICIOS'),
+        title: const Text(''),
         leading: IconButton(
           icon: const Icon(Icons.menu),
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
