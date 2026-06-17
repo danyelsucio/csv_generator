@@ -34,10 +34,9 @@ class OficiosPage extends StatefulWidget {
 }
 
 class ResaltadorController extends TextEditingController {
-  final bool resaltar;
   final List<Map<String, int>> camposVerdes;
 
-  ResaltadorController({String? text, this.resaltar = false, this.camposVerdes = const []}) : super(text: text);
+  ResaltadorController({String? text, this.camposVerdes = const []}) : super(text: text);
 
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
@@ -70,14 +69,14 @@ class ResaltadorController extends TextEditingController {
           text: text.substring(start, i),
           style: baseStyle.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
         ));
-      } else if (resaltar && i + 1 < text.length && text[i] == '{' && text[i + 1] == '{') {
+      } else if (i + 1 < text.length && text[i] == '{' && text[i + 1] == '{') {
         int start = i;
         int end = text.indexOf('}}', i);
         if (end!= -1) {
           end += 2;
           spans.add(TextSpan(
             text: text.substring(start, end),
-            style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+            style: baseStyle.copyWith(color: Colors.red, fontWeight: FontWeight.bold), // SIEMPRE ROJO
           ));
           i = end;
         } else {
@@ -96,21 +95,89 @@ class ResaltadorController extends TextEditingController {
 
 class _OficiosPageState extends State<OficiosPage> {
   List<Map<String, String>> _fundamentos = [];
+  List<Map<String, String>> _pedidos = [];
+  List<Map<String, String>> _recibidos = [];
+
   String _textoEscaneadoCompleto = '';
   late ResaltadorController _controller;
   final FocusNode _focusNode = FocusNode();
-  bool _resaltarCampos = false;
   final ScrollController _scrollController = ScrollController();
   List<Map<String, int>> _camposVerdes = [];
   OverlayEntry? _overlayEntry;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  static const String _keyTextoPrincipal = 'texto_principal_oficio';
+  static const String _keyTextoEscaneado = 'texto_escaneado_completo';
+  static const String _keyPedidos = 'lista_pedidos';
+  static const String _keyRecibidos = 'lista_recibidos';
 
   @override
   void initState() {
     super.initState();
-    _controller = ResaltadorController(resaltar: _resaltarCampos, camposVerdes: _camposVerdes);
+    _controller = ResaltadorController(camposVerdes: _camposVerdes);
     _controller.addListener(_checarCampoEnCursor);
-    _cargarFundamentos();
+    _controller.addListener(_guardarTextoPrincipal);
+    _cargarTodo();
     Future.delayed(Duration.zero, () => _focusNode.requestFocus());
+  }
+
+  Future<void> _cargarTodo() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final String? textoGuardado = prefs.getString(_keyTextoPrincipal);
+    if (textoGuardado!= null && textoGuardado.isNotEmpty) {
+      _actualizarController(textoGuardado, textoGuardado.length);
+    }
+
+    _textoEscaneadoCompleto = prefs.getString(_keyTextoEscaneado)?? '';
+
+    final String? fundString = prefs.getString('fundamentos_v2');
+    if (fundString!= null) {
+      _fundamentos = List<Map<String, String>>.from(
+        json.decode(fundString).map((e) => Map<String, String>.from(e))
+      );
+    }
+
+    final String? pedidosString = prefs.getString(_keyPedidos);
+    if (pedidosString!= null) {
+      _pedidos = List<Map<String, String>>.from(
+        json.decode(pedidosString).map((e) => Map<String, String>.from(e))
+      );
+    }
+
+    final String? recibidosString = prefs.getString(_keyRecibidos);
+    if (recibidosString!= null) {
+      _recibidos = List<Map<String, String>>.from(
+        json.decode(recibidosString).map((e) => Map<String, String>.from(e))
+      );
+    }
+
+    setState(() {});
+  }
+
+  void _guardarTextoPrincipal() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyTextoPrincipal, _controller.text);
+  }
+
+  Future<void> _guardarTextoEscaneado() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyTextoEscaneado, _textoEscaneadoCompleto);
+  }
+
+  Future<void> _guardarFundamentos() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fundamentos_v2', json.encode(_fundamentos));
+  }
+
+  Future<void> _guardarPedidos() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPedidos, json.encode(_pedidos));
+  }
+
+  Future<void> _guardarRecibidos() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyRecibidos, json.encode(_recibidos));
   }
 
   void _checarCampoEnCursor() {
@@ -235,23 +302,6 @@ class _OficiosPageState extends State<OficiosPage> {
     return null;
   }
 
-  Future<void> _cargarFundamentos() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? fundString = prefs.getString('fundamentos_v2');
-    if (fundString!= null) {
-      setState(() {
-        _fundamentos = List<Map<String, String>>.from(
-          json.decode(fundString).map((e) => Map<String, String>.from(e))
-        );
-      });
-    }
-  }
-
-  Future<void> _guardarFundamentos() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fundamentos_v2', json.encode(_fundamentos));
-  }
-
   void _pegarFecha() async {
     DateTime? picked = await showDatePicker(
       context: context,
@@ -263,7 +313,6 @@ class _OficiosPageState extends State<OficiosPage> {
     if (picked!= null) {
       String fecha = _formatearFechaLarga(picked);
 
-      // AUTO-GUARDA FECHA EN LIBRITO
       bool yaExiste = _fundamentos.any((f) =>
         f['titulo']!.toUpperCase() == 'FECHA' && f['texto']!.trim() == fecha.trim()
       );
@@ -320,7 +369,7 @@ class _OficiosPageState extends State<OficiosPage> {
       _insertarTexto(textoParaInsertar);
       _snack('Texto agregado');
     }
-    _cargarFundamentos();
+    _cargarTodo();
   }
 
   void _abrirCamaraOCR() async {
@@ -338,11 +387,12 @@ class _OficiosPageState extends State<OficiosPage> {
 
     if (resultado!= null) {
       setState(() {
-        _textoEscaneadoCompleto = resultado['completo']!;
+        _textoEscaneadoCompleto = resultado['completo']!; // PERMANECE HASTA NUEVA FOTO
         if (resultado['seleccion']!.isNotEmpty) {
           _insertarTexto(resultado['seleccion']!);
         }
       });
+      _guardarTextoEscaneado();
       if (resultado['seleccion']!.isNotEmpty) {
         _snack('Campo reemplazado');
       }
@@ -360,7 +410,6 @@ class _OficiosPageState extends State<OficiosPage> {
       final String nuevoTexto = textoActual.replaceRange(inicio, fin, texto);
       final String nombreCampo = campo['contenido'].toUpperCase().trim();
 
-      // AUTO-GUARDA SOLO NOMBRE Y FECHA
       if ((nombreCampo == 'NOMBRE' || nombreCampo == 'FECHA') && texto.trim().isNotEmpty) {
         bool yaExiste = _fundamentos.any((f) =>
           f['titulo']!.toUpperCase() == nombreCampo && f['texto']!.trim() == texto.trim()
@@ -403,13 +452,14 @@ class _OficiosPageState extends State<OficiosPage> {
   void _actualizarController(String texto, int posCursor) {
     final seleccionActual = TextSelection.collapsed(offset: posCursor);
     _controller.removeListener(_checarCampoEnCursor);
+    _controller.removeListener(_guardarTextoPrincipal);
     _controller.dispose();
     _controller = ResaltadorController(
       text: texto,
-      resaltar: _resaltarCampos,
       camposVerdes: _camposVerdes
     );
     _controller.addListener(_checarCampoEnCursor);
+    _controller.addListener(_guardarTextoPrincipal);
     _controller.selection = seleccionActual;
     setState(() {});
   }
@@ -420,60 +470,226 @@ class _OficiosPageState extends State<OficiosPage> {
   }
 
   void _limpiarTexto() async {
-  final confirmar = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Colors.grey[900],
-      title: const Text('¿Borrar todo?', style: TextStyle(color: Colors.white)),
-      content: const Text(
-        'Se va a borrar todo el texto del oficio. ¿Estás seguro?',
-        style: TextStyle(color: Colors.white70),
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('¿Borrar todo?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Se va a borrar todo el texto del oficio. ¿Estás seguro?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('BORRAR', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+    );
+
+    if (confirmar == true) {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+      setState(() {
+        _controller.clear();
+        _camposVerdes.clear();
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyTextoPrincipal);
+      _snack('Texto limpiado');
+    }
+  }
+
+  void _mostrarListaEnPantalla(String tipo, List<Map<String, String>> lista) {
+    if (_controller.text.trim().isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('Primero borra el texto', style: TextStyle(color: Colors.white)),
+          content: const Text(
+            'Para ver la lista debes borrar el texto con el botón de tachecito',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(color: Colors.red)),
+            ),
+          ],
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('BORRAR', style: TextStyle(color: Colors.red)),
-        ),
-      ],
-    ),
-  );
+      );
+      return;
+    }
 
-  if (confirmar == true) {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+    String textoLista = lista.map((e) {
+      if (tipo == 'Pedidos') {
+        return 'VOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nFOLIO: ${e['folio']}\nDIRECCIÓN: ${e['direccion']}';
+      } else {
+        return 'FOLIO: ${e['folio']}\nVOLANTE: ${e['volante']}\nCARPETA: ${e['carpeta']}\nDIRECCIÓN: ${e['direccion']}';
+      }
+    }).join('\n\n─────────────────\n\n');
+
     setState(() {
-      _controller.clear();
-      _resaltarCampos = false;
-      _camposVerdes.clear();
+      _actualizarController(textoLista, 0);
     });
-    _snack('Texto limpiado');
-  }
-  }
-
-  bool _tieneCampos() {
-    return RegExp(r'\{\{[^}]+\}\}').hasMatch(_controller.text);
-  }
-
-  void _aplicarResaltado() {
-    setState(() {
-      _resaltarCampos =!_resaltarCampos;
-      _actualizarController(_controller.text, _controller.selection.baseOffset);
-    });
-    _snack(_resaltarCampos? 'Campos resaltados' : 'Resaltado quitado');
   }
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _agregarPedido() async {
+    final volanteCtrl = TextEditingController();
+    final carpetaCtrl = TextEditingController();
+    final folioCtrl = TextEditingController();
+    final direccionCtrl = TextEditingController();
+
+    final resultado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Nuevo Pedido', style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _campoDialog(volanteCtrl, 'VOLANTE'),
+              _campoDialog(carpetaCtrl, 'CARPETA'),
+              _campoDialog(folioCtrl, 'FOLIO'),
+              _campoDialog(direccionCtrl, 'DIRECCIÓN'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Guardar', style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
+    );
+
+    if (resultado == true) {
+      setState(() {
+        _pedidos.add({
+          'volante': volanteCtrl.text.trim(),
+          'carpeta': carpetaCtrl.text.trim(),
+          'folio': folioCtrl.text.trim(),
+          'direccion': direccionCtrl.text.trim(),
+        });
+      });
+      _guardarPedidos();
+    }
+
+    volanteCtrl.dispose();
+    carpetaCtrl.dispose();
+    folioCtrl.dispose();
+    direccionCtrl.dispose();
+  }
+
+  void _agregarRecibido() async {
+    final folioCtrl = TextEditingController();
+
+    final resultado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Nuevo Recibido', style: TextStyle(color: Colors.white)),
+        content: _campoDialog(folioCtrl, 'FOLIO'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Buscar', style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
+    );
+
+    if (resultado == true) {
+      final folio = folioCtrl.text.trim();
+      final pedido = _pedidos.firstWhere(
+        (p) => p['folio'] == folio,
+        orElse: () => {},
+      );
+
+      if (pedido.isEmpty) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.grey[900],
+            title: const Text('Carpeta no pedida', style: TextStyle(color: Colors.red)),
+            content: const Text(
+              'Este folio no está en la lista de pedidos',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+      } else {
+        setState(() {
+          _recibidos.add(pedido);
+        });
+        _guardarRecibidos();
+        _snack('Recibido agregado');
+      }
+    }
+
+    folioCtrl.dispose();
+  }
+
+  List<Map<String, String>> _obtenerPendientes() {
+    return _pedidos.where((p) {
+      return!_recibidos.any((r) => r['folio'] == p['folio']);
+    }).toList();
+  }
+
+  Widget _campoDialog(TextEditingController ctrl, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextField(
+        controller: ctrl,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white70),
+          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
+          focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+        ),
+      ),
+    );
+  }
+
+  void _borrarItem(List<Map<String, String>> lista, int index, VoidCallback guardar) {
+    setState(() {
+      lista.removeAt(index);
+    });
+    guardar();
+  }
+
   @override
   void dispose() {
     _overlayEntry?.remove();
     _controller.removeListener(_checarCampoEnCursor);
+    _controller.removeListener(_guardarTextoPrincipal);
     _controller.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -483,25 +699,16 @@ class _OficiosPageState extends State<OficiosPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
         title: const Text('OFICIOS'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
         actions: [
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _controller,
-            builder: (context, value, child) {
-              if (!_tieneCampos()) return const SizedBox.shrink();
-              return IconButton(
-                icon: Icon(
-                  _resaltarCampos? Icons.change_circle : Icons.change_circle_outlined,
-                  color: _resaltarCampos? Colors.yellow : Colors.white,
-                ),
-                onPressed: _aplicarResaltado,
-                tooltip: 'Resaltar campos',
-              );
-            },
-          ),
           IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pegarFecha, tooltip: 'Fecha'),
           IconButton(icon: const Icon(Icons.menu_book), onPressed: _abrirPaginaFundamentos, tooltip: 'Librito'),
           IconButton(icon: const Icon(Icons.camera_alt), onPressed: _abrirCamaraOCR, tooltip: 'Escanear'),
@@ -509,6 +716,99 @@ class _OficiosPageState extends State<OficiosPage> {
           IconButton(icon: const Icon(Icons.clear), onPressed: _limpiarTexto, tooltip: 'Limpiar'),
           const SizedBox(width: 8),
         ],
+      ),
+      drawer: Drawer(
+        backgroundColor: Colors.grey[900],
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.red[900]!, Colors.green[900]!],
+                ),
+              ),
+              child: const Text(
+                'OFICIOS - MENÚ',
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.send, color: Colors.red),
+              title: const Text('Pedidos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              trailing: IconButton(
+                icon: const Icon(Icons.add_circle, color: Colors.green),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _agregarPedido();
+                },
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _mostrarListaEnPantalla('Pedidos', _pedidos);
+              },
+            ),
+            if (_pedidos.isNotEmpty)
+            ..._pedidos.asMap().entries.map((e) => ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.only(left: 72, right: 16),
+                title: Text(
+                  'FOLIO: ${e.value['folio']}',
+                  style: const TextStyle(color: Colors.green, fontSize: 12),
+                ),
+                subtitle: Text(
+                  'CARPETA: ${e.value['carpeta']}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                  onPressed: () => _borrarItem(_pedidos, e.key, _guardarPedidos),
+                ),
+              )),
+            const Divider(color: Colors.white24),
+            ListTile(
+              leading: const Icon(Icons.inbox, color: Colors.green),
+              title: const Text('Recibidos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              trailing: IconButton(
+                icon: const Icon(Icons.add_circle, color: Colors.red),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _agregarRecibido();
+                },
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _mostrarListaEnPantalla('Recibidos', _recibidos);
+              },
+            ),
+            if (_recibidos.isNotEmpty)
+            ..._recibidos.asMap().entries.map((e) => ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.only(left: 72, right: 16),
+                title: Text(
+                  'FOLIO: ${e.value['folio']}',
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+                subtitle: Text(
+                  'CARPETA: ${e.value['carpeta']}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.green, size: 18),
+                  onPressed: () => _borrarItem(_recibidos, e.key, _guardarRecibidos),
+                ),
+              )),
+            const Divider(color: Colors.white24),
+            ListTile(
+              leading: const Icon(Icons.pending_actions, color: Colors.yellow),
+              title: const Text('Pendientes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onTap: () {
+                Navigator.pop(context);
+                _mostrarListaEnPantalla('Pendientes', _obtenerPendientes());
+              },
+            ),
+          ],
+        ),
       ),
       body: Container(
         margin: const EdgeInsets.all(12),
@@ -749,169 +1049,7 @@ class _FundamentosPageState extends State<FundamentosPage> {
                       color: estaSeleccionado? Colors.blue[900]!.withOpacity(0.3) : Colors.grey[900],
                       border: Border.all(
                         color: estaSeleccionado? Colors.blue : Colors.transparent,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ListTile(
-                      title: Text(
-                        fund['titulo']!,
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        fund['texto']!,
-                        style: TextStyle(
-                          color: estaSeleccionado? Colors.blue[200] : Colors.white70,
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _editarFund(i),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class CameraScreen extends StatefulWidget {
-  final String textoAnterior;
-  const CameraScreen({super.key, required this.textoAnterior});
-
-  @override
-  _CameraScreenState createState() => _CameraScreenState();
-}
-
-class _CameraScreenState extends State<CameraScreen> {
-  late CameraController _controller;
-  late Future<void> _initializeControllerFuture;
-  final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-  bool _procesando = false;
-  String _textoCompleto = '';
-  final TextEditingController _textoController = TextEditingController();
-  bool _fotoTomada = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // 👇 QUITAMOS HORIZONTAL, VERTICAL COMO ANTES
-    _controller = CameraController(cameras[0], ResolutionPreset.high);
-    _initializeControllerFuture = _controller.initialize();
-    _textoController.text = widget.textoAnterior;
-    _textoCompleto = widget.textoAnterior;
-  }
-
-  Future<void> _escanearTexto() async {
-    try {
-      setState(() => _procesando = true);
-      await _initializeControllerFuture;
-      final image = await _controller.takePicture();
-      final inputImage = InputImage.fromFilePath(image.path);
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      setState(() {
-        _textoCompleto = recognizedText.text;
-        _textoController.text = recognizedText.text;
-        _procesando = false;
-        _fotoTomada = true;
-      });
-    } catch (e) {
-      setState(() => _procesando = false);
-    }
-  }
-
-  void _pegarSeleccionYCerrar() {
-    final seleccion = _textoController.selection;
-    String textoAPegar = '';
-
-    if (seleccion.isValid &&!seleccion.isCollapsed) {
-      textoAPegar = seleccion.textInside(_textoController.text);
-    }
-
-    Navigator.pop(context, {
-      'completo': _textoCompleto,
-      'seleccion': textoAPegar,
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    textRecognizer.close();
-    _textoController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.red[900],
-        title: const Text('Escanear y seleccionar'),
-        actions: [
-          if (_fotoTomada)
-            IconButton(
-              icon: const Icon(Icons.add),
-              onPressed: _pegarSeleccionYCerrar,
-              tooltip: 'Pegar selección',
-            ),
-        ],
-      ),
-      body: _fotoTomada
-        ? Container( // PANTALLA COMPLETA CON TEXTO VERTICAL
-              color: Colors.grey[900],
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Selecciona texto con el dedo y pica +',
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.camera_alt, color: Colors.red),
-                        onPressed: () => setState(() => _fotoTomada = false),
-                        tooltip: 'Tomar otra foto',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _textoController,
-                      readOnly: true,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Texto escaneado...',
-                        hintStyle: TextStyle(color: Colors.white38),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Stack( // CÁMARA PANTALLA COMPLETA VERTICAL
-              children: [
-                Positioned.fill(
-                  child: FutureBuilder<void>(
-                    future: _initializeControllerFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done) {
-                        return CameraPreview(_controller);
+                                                return CameraPreview(_controller);
                       } else {
                         return const Center(child: CircularProgressIndicator());
                       }
@@ -927,7 +1065,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       backgroundColor: Colors.red[900],
                       onPressed: _procesando? null : _escanearTexto,
                       child: _procesando
-                        ? const CircularProgressIndicator(color: Colors.white)
+                       ? const CircularProgressIndicator(color: Colors.white)
                           : const Icon(Icons.camera, size: 32),
                     ),
                   ),
@@ -936,4 +1074,4 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
     );
   }
-}
+              }
