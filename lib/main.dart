@@ -797,16 +797,12 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _procesando = false;
   String _textoCompleto = '';
   final TextEditingController _textoController = TextEditingController();
-  bool _fotoTomada = false; // 👈 Para saber si ya tomó foto
+  bool _fotoTomada = false;
 
   @override
   void initState() {
     super.initState();
-    // 👇 FUERZA HORIZONTAL
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // 👇 QUITAMOS HORIZONTAL, VERTICAL COMO ANTES
     _controller = CameraController(cameras[0], ResolutionPreset.high);
     _initializeControllerFuture = _controller.initialize();
     _textoController.text = widget.textoAnterior;
@@ -824,7 +820,7 @@ class _CameraScreenState extends State<CameraScreen> {
         _textoCompleto = recognizedText.text;
         _textoController.text = recognizedText.text;
         _procesando = false;
-        _fotoTomada = true; // 👈 Ya tomó foto
+        _fotoTomada = true;
       });
     } catch (e) {
       setState(() => _procesando = false);
@@ -839,12 +835,6 @@ class _CameraScreenState extends State<CameraScreen> {
       textoAPegar = seleccion.textInside(_textoController.text);
     }
 
-    // 👇 REGRESA A VERTICAL ANTES DE SALIR
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-
     Navigator.pop(context, {
       'completo': _textoCompleto,
       'seleccion': textoAPegar,
@@ -856,11 +846,6 @@ class _CameraScreenState extends State<CameraScreen> {
     _controller.dispose();
     textRecognizer.close();
     _textoController.dispose();
-    // 👇 REGRESA A VERTICAL SI SE CIERRA
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
     super.dispose();
   }
 
@@ -881,7 +866,7 @@ class _CameraScreenState extends State<CameraScreen> {
         ],
       ),
       body: _fotoTomada
-         ? Container( // 👈 PANTALLA COMPLETA CON TEXTO
+        ? Container( // PANTALLA COMPLETA CON TEXTO VERTICAL
               color: Colors.grey[900],
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -905,7 +890,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     child: TextField(
                       controller: _textoController,
                       readOnly: true,
-                      style: const TextStyle(color: Colors.white, fontSize: 18),
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                       maxLines: null,
                       expands: true,
                       textAlignVertical: TextAlignVertical.top,
@@ -919,7 +904,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 ],
               ),
             )
-          : Stack( // 👈 CÁMARA PANTALLA COMPLETA
+          : Stack( // CÁMARA PANTALLA COMPLETA VERTICAL
               children: [
                 Positioned.fill(
                   child: FutureBuilder<void>(
@@ -942,7 +927,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       backgroundColor: Colors.red[900],
                       onPressed: _procesando? null : _escanearTexto,
                       child: _procesando
-                         ? const CircularProgressIndicator(color: Colors.white)
+                        ? const CircularProgressIndicator(color: Colors.white)
                           : const Icon(Icons.camera, size: 32),
                     ),
                   ),
