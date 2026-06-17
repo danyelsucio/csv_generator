@@ -883,20 +883,21 @@ class _OficiosPageState extends State<OficiosPage> {
     }).toList();
   }
 
-  Widget _campoDialog(TextEditingController ctrl, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: TextField(
-        controller: ctrl,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: Colors.white70),
-          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
-          focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-        ),
+  Widget _campoDialog(TextEditingController ctrl, String label, [FocusNode? focus]) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: TextField(
+      controller: ctrl,
+      focusNode: focus,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white70),
+        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
+        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
       ),
-    );
+    ),
+  );
   }
 
   void _borrarItem(List<Map<String, String>> lista, int index, VoidCallback guardar) {
