@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'JARVIS Scanner',
+      title: 'Adrianita csv',
       theme: ThemeData.dark(),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
