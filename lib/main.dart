@@ -15,7 +15,7 @@ const List<String> CAMPOS_ORDEN = [
 
 // CAMPOS QUE SON TRUE/FALSE
 const Set<String> CAMPOS_BOOL = {
-  'ESTATUS', 'EN_ESTUDIO', 'ACCESO', 'COPIAS_VICT', 'COPIAS_IMP', 
+  'ESTATUS', 'EN_ESTUDIO', 'ACCESO', 'COPIAS_VICT', 'COPIAS_IMP',
   'AUT_MEDIOS', 'AUT_ABOGADOS', 'S_R', 'COPIAS_AUTENTICAS'
 };
 
@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Adrianita csv',
+      title: 'Adry CSV', // CAMBIO 1: Título
       theme: ThemeData.dark(),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
@@ -67,6 +67,64 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // CAMBIO 2: HELPERS PA FECHA CON LETRA
+  String _numeroALetras(int numero) {
+    const unidades = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+    const diezVeinte = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
+    const decenas = ['', '', 'veinte', 'treinta'];
+
+    if (numero < 10) return unidades[numero];
+    if (numero < 20) return diezVeinte[numero - 10];
+    if (numero == 20) return 'veinte';
+    if (numero < 30) return 'veinti${unidades[numero - 20]}';
+    if (numero == 30) return 'treinta';
+    if (numero == 31) return 'treinta y uno';
+    return numero.toString();
+  }
+
+  String _mesALetras(int mes) {
+    const meses = [
+      '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+    return meses[mes];
+  }
+
+  Future<void> _abrirDatePicker(String campo, StateSetter setModalState) async {
+    final ahora = DateTime.now();
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: ahora,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.red,
+              surface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (fecha!= null) {
+      final diaNum = fecha.day.toString().padLeft(2, '0');
+      final diaLetra = _numeroALetras(fecha.day);
+      final mesLetra = _mesALetras(fecha.month);
+      final fechaFormateada = '$diaNum $diaLetra de $mesLetra';
+
+      setModalState(() {
+        _valoresCampos[campo] = fechaFormateada;
+      });
+      setState(() {});
+      Navigator.pop(context);
+      _snack('Campo $campo = $fechaFormateada');
+    }
+  }
+
   void _abrirCamara() async {
     if (cameras.isEmpty) {
       _snack('No hay cámaras disponibles');
@@ -96,7 +154,8 @@ class _HomePageState extends State<HomePage> {
     _mostrarBottomSheetCampos(textoSeleccionado);
   }
 
-  void _mostrarBottomSheetCampos(String textoSeleccionado) {
+
+    void _mostrarBottomSheetCampos(String textoSeleccionado) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.grey[900],
@@ -109,7 +168,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(
                 textoSeleccionado.isEmpty
-                 ? 'SELECCIONA UN CAMPO'
+                ? 'SELECCIONA UN CAMPO'
                   : 'Texto: "${textoSeleccionado.length > 30? '${textoSeleccionado.substring(0, 30)}...' : textoSeleccionado}"',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
@@ -123,6 +182,7 @@ class _HomePageState extends State<HomePage> {
                     final valor = _valoresCampos[campo]?? '';
                     final tieneValor = valor.isNotEmpty && valor!= 'false';
                     final esBool = CAMPOS_BOOL.contains(campo);
+                    final esFecha = campo == 'FECHA'; // CAMBIO 2: Detectar campo fecha
 
                     return ListTile(
                       dense: true,
@@ -134,7 +194,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       subtitle: esBool
-                       ? Text(valor == 'true'? 'TRUE' : 'FALSE',
+                      ? Text(valor == 'true'? 'TRUE' : 'FALSE',
                             style: TextStyle(color: valor == 'true'? Colors.green : Colors.white54))
                         : Text(valor.isEmpty? 'Vacío' : valor,
                             style: const TextStyle(color: Colors.white54, fontSize: 12),
@@ -164,9 +224,16 @@ class _HomePageState extends State<HomePage> {
                                 setState(() {});
                               },
                             ),
+                          if (esFecha) // CAMBIO 2: Icono calendario
+                            const Icon(Icons.calendar_month, color: Colors.red, size: 20),
                         ],
                       ),
                       onTap: esBool? null : () {
+                        // CAMBIO 2: Si es FECHA, abre calendario
+                        if (esFecha) {
+                          _abrirDatePicker(campo, setModalState);
+                          return;
+                        }
                         if (textoSeleccionado.isEmpty) {
                           _snack('Selecciona texto primero');
                           return;
@@ -215,16 +282,14 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-
-
-    @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
         title: const Text(
-          'Adry CSV',
+          'Adry CSV', // CAMBIO 1: Nombre en barra
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -269,7 +334,7 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _textoEscaneado.isEmpty
-                ? const Center(
+               ? const Center(
                       child: Text(
                         'Pica el icono de la cámara pa escanear...',
                         style: TextStyle(color: Colors.white38, fontSize: 16),
@@ -333,24 +398,20 @@ class _PaginaCamposState extends State<PaginaCampos> {
 
   Future<void> _guardarTxt() async {
   try {
-    // 1. PREGUNTAR NOMBRE DEL ARCHIVO
-    final fecha = DateTime.now().toIso8601String().split('T')[0];
-    final hora = DateTime.now().hour.toString().padLeft(2, '0') +
-                 DateTime.now().minute.toString().padLeft(2, '0');
-    
-    final ctrlNombre = TextEditingController(text: 'JARVIS_${fecha}_$hora');
-    
+    // CAMBIO 3: CAMPO VACÍO POR DEFAULT
+    final ctrlNombre = TextEditingController(); // Ya no tiene texto default
+
     final nombreArchivo = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text('NOMBRE DEL ARCHIVO', 
+        title: const Text('NOMBRE DEL ARCHIVO',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: ctrlNombre,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            hintText: 'Ej: Escritura_Daniel_Hernandez',
+            hintText: 'Ej: Escritura_Daniel_Hernandez', // Solo hint
             hintStyle: TextStyle(color: Colors.white38),
             enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.red)),
@@ -371,9 +432,9 @@ class _PaginaCamposState extends State<PaginaCampos> {
       ),
     );
 
-    // Si canceló, nos salimos
+    // Si canceló o está vacío, nos salimos
     if (nombreArchivo == null || nombreArchivo.isEmpty) {
-      _snack('Cancelado');
+      _snack('Debes poner un nombre');
       return;
     }
 
@@ -412,7 +473,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
 
     await file.writeAsString(lineaExcel, flush: true);
     _snack('Guardado: $nombreLimpio.csv');
-    
+
   } catch (e) {
     _snack('Error al guardar: $e');
   }
@@ -428,7 +489,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('CAMPOS JARVIS'),
+        title: const Text('CAMPOS ADRY CSV'), // CAMBIO 1: Nombre
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -474,7 +535,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: esBool
-               ? Switch(
+              ? Switch(
                       value: valor == 'true',
                       activeColor: Colors.green,
                       onChanged: (v) {
@@ -613,7 +674,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 child: _procesando
-              ? const CircularProgressIndicator(color: Colors.white)
+             ? const CircularProgressIndicator(color: Colors.white)
                     : const Icon(Icons.camera, size: 32, color: Colors.white),
               ),
             ),
