@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Adry CSV', // CAMBIO 1: Título
+      title: 'Adry CSV',
       theme: ThemeData.dark(),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
@@ -67,7 +67,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // CAMBIO 2: HELPERS PA FECHA CON LETRA
+  // HELPERS PA FECHA CON LETRA
   String _numeroALetras(int numero) {
     const unidades = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
     const diezVeinte = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
@@ -168,7 +168,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(
                 textoSeleccionado.isEmpty
-                ? 'SELECCIONA UN CAMPO'
+               ? 'SELECCIONA UN CAMPO'
                   : 'Texto: "${textoSeleccionado.length > 30? '${textoSeleccionado.substring(0, 30)}...' : textoSeleccionado}"',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
@@ -182,7 +182,8 @@ class _HomePageState extends State<HomePage> {
                     final valor = _valoresCampos[campo]?? '';
                     final tieneValor = valor.isNotEmpty && valor!= 'false';
                     final esBool = CAMPOS_BOOL.contains(campo);
-                    final esFecha = campo == 'FECHA'; // CAMBIO 2: Detectar campo fecha
+                    // CAMBIO: AHORA FECHA Y RECEPCION USAN CALENDARIO
+                    final esFecha = campo == 'FECHA' || campo == 'RECEPCION';
 
                     return ListTile(
                       dense: true,
@@ -194,7 +195,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       subtitle: esBool
-                      ? Text(valor == 'true'? 'TRUE' : 'FALSE',
+                     ? Text(valor == 'true'? 'TRUE' : 'FALSE',
                             style: TextStyle(color: valor == 'true'? Colors.green : Colors.white54))
                         : Text(valor.isEmpty? 'Vacío' : valor,
                             style: const TextStyle(color: Colors.white54, fontSize: 12),
@@ -224,12 +225,12 @@ class _HomePageState extends State<HomePage> {
                                 setState(() {});
                               },
                             ),
-                          if (esFecha) // CAMBIO 2: Icono calendario
+                          if (esFecha)
                             const Icon(Icons.calendar_month, color: Colors.red, size: 20),
                         ],
                       ),
                       onTap: esBool? null : () {
-                        // CAMBIO 2: Si es FECHA, abre calendario
+                        // Si es FECHA o RECEPCION, abre calendario
                         if (esFecha) {
                           _abrirDatePicker(campo, setModalState);
                           return;
@@ -289,7 +290,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.red[900],
         title: const Text(
-          'Adry CSV', // CAMBIO 1: Nombre en barra
+          'Adry CSV',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -334,7 +335,7 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _textoEscaneado.isEmpty
-               ? const Center(
+              ? const Center(
                       child: Text(
                         'Pica el icono de la cámara pa escanear...',
                         style: TextStyle(color: Colors.white38, fontSize: 16),
@@ -398,8 +399,8 @@ class _PaginaCamposState extends State<PaginaCampos> {
 
   Future<void> _guardarTxt() async {
   try {
-    // CAMBIO 3: CAMPO VACÍO POR DEFAULT
-    final ctrlNombre = TextEditingController(); // Ya no tiene texto default
+    // CAMPO VACÍO POR DEFAULT
+    final ctrlNombre = TextEditingController();
 
     final nombreArchivo = await showDialog<String>(
       context: context,
@@ -411,7 +412,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
           controller: ctrlNombre,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            hintText: 'Ej: Escritura_Daniel_Hernandez', // Solo hint
+            hintText: 'Ej: Escritura_Daniel_Hernandez',
             hintStyle: TextStyle(color: Colors.white38),
             enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.red)),
@@ -489,7 +490,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('CAMPOS ADRY CSV'), // CAMBIO 1: Nombre
+        title: const Text('CAMPOS ADRY CSV'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -535,7 +536,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: esBool
-              ? Switch(
+             ? Switch(
                       value: valor == 'true',
                       activeColor: Colors.green,
                       onChanged: (v) {
@@ -674,7 +675,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 child: _procesando
-             ? const CircularProgressIndicator(color: Colors.white)
+            ? const CircularProgressIndicator(color: Colors.white)
                     : const Icon(Icons.camera, size: 32, color: Colors.white),
               ),
             ),
