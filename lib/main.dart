@@ -224,7 +224,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.red[900],
         title: const Text(
-          'JARVIS Scanner',
+          'Adry CSV',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
