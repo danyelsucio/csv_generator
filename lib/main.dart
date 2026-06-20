@@ -332,43 +332,49 @@ class _PaginaCamposState extends State<PaginaCampos> {
   }
 
   Future<void> _guardarTxt() async {
-    try {
-      // Pedir permiso de storage
+  try {
+    // PEDIR PERMISOS CORRECTOS SEGÚN VERSIÓN ANDROID
+    if (Platform.isAndroid) {
       var status = await Permission.storage.request();
-      if (!status.isGranted) {
-        _snack('Permiso denegado pa guardar');
+
+      // Android 11+ ocupa permiso especial
+      if (await Permission.manageExternalStorage.request().isDenied) {
+        _snack('Ocupas dar permiso de "Todos los archivos" en Ajustes');
+        await openAppSettings();
         return;
       }
-
-      // Generar línea pa Excel: TAB separado, vacíos se respetan
-      final valoresOrdenados = CAMPOS_ORDEN.map((campo) {
-        return _valoresTemp[campo]?? '';
-      }).toList();
-
-      final lineaExcel = valoresOrdenados.join('\t');
-
-      // Guardar en Descargas
-      Directory? dir;
-      if (Platform.isAndroid) {
-        dir = Directory('/storage/emulated/0/Download');
-        if (!await dir.exists()) {
-          dir = await getExternalStorageDirectory();
-        }
-      } else {
-        dir = await getApplicationDocumentsDirectory();
-      }
-
-      final fecha = DateTime.now().toIso8601String().split('T')[0];
-      final hora = DateTime.now().hour.toString().padLeft(2, '0') +
-                   DateTime.now().minute.toString().padLeft(2, '0');
-      final file = File('${dir!.path}/JARVIS_${fecha}_$hora.txt');
-
-      await file.writeAsString(lineaExcel);
-      _snack('Guardado: ${file.path}');
-    } catch (e) {
-      _snack('Error al guardar: $e');
     }
+
+    // Generar línea pa Excel: TAB separado, vacíos se respetan
+    final valoresOrdenados = CAMPOS_ORDEN.map((campo) {
+      return _valoresTemp[campo]?? '';
+    }).toList();
+
+    final lineaExcel = valoresOrdenados.join('\t');
+
+    // RUTA PA DESCARGAS
+    Directory? dir;
+    if (Platform.isAndroid) {
+      dir = Directory('/storage/emulated/0/Download');
+    } else {
+      dir = await getApplicationDocumentsDirectory();
+    }
+
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final fecha = DateTime.now().toIso8601String().split('T')[0];
+    final hora = DateTime.now().hour.toString().padLeft(2, '0') +
+                 DateTime.now().minute.toString().padLeft(2, '0');
+    final file = File('${dir.path}/JARVIS_${fecha}_$hora.txt');
+
+    await file.writeAsString(lineaExcel, flush: true);
+    _snack('Guardado en: Descargas/JARVIS_${fecha}_$hora.txt');
+  } catch (e) {
+    _snack('Error al guardar: $e');
   }
+}
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
