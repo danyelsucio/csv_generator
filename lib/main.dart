@@ -333,26 +333,68 @@ class _PaginaCamposState extends State<PaginaCampos> {
 
   Future<void> _guardarTxt() async {
   try {
-    // PEDIR PERMISOS CORRECTOS SEGÚN VERSIÓN ANDROID
-    if (Platform.isAndroid) {
-      var status = await Permission.storage.request();
+    // 1. PREGUNTAR NOMBRE DEL ARCHIVO
+    final fecha = DateTime.now().toIso8601String().split('T')[0];
+    final hora = DateTime.now().hour.toString().padLeft(2, '0') +
+                 DateTime.now().minute.toString().padLeft(2, '0');
+    
+    final ctrlNombre = TextEditingController(text: 'JARVIS_${fecha}_$hora');
+    
+    final nombreArchivo = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('NOMBRE DEL ARCHIVO', 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: ctrlNombre,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Ej: Escritura_Daniel_Hernandez',
+            hintStyle: TextStyle(color: Colors.white38),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.red)),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.green)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCELAR', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ctrlNombre.text.trim()),
+            child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
+    );
 
-      // Android 11+ ocupa permiso especial
+    // Si canceló, nos salimos
+    if (nombreArchivo == null || nombreArchivo.isEmpty) {
+      _snack('Cancelado');
+      return;
+    }
+
+    // 2. PEDIR PERMISOS
+    if (Platform.isAndroid) {
       if (await Permission.manageExternalStorage.request().isDenied) {
-        _snack('Ocupas dar permiso de "Todos los archivos" en Ajustes');
+        _snack('Ocupas dar permiso en Ajustes');
         await openAppSettings();
         return;
       }
     }
 
-    // Generar línea pa Excel: TAB separado, vacíos se respetan
+    // 3. GENERAR CSV CON COMILLAS
     final valoresOrdenados = CAMPOS_ORDEN.map((campo) {
-      return _valoresTemp[campo]?? '';
+      final valor = _valoresTemp[campo]?? '';
+      return '"${valor.replaceAll('"', '""')}"';
     }).toList();
 
-    final lineaExcel = valoresOrdenados.join('\t');
+    final lineaExcel = valoresOrdenados.join(',');
 
-    // RUTA PA DESCARGAS
+    // 4. GUARDAR CON EL NOMBRE QUE PUSO
     Directory? dir;
     if (Platform.isAndroid) {
       dir = Directory('/storage/emulated/0/Download');
@@ -364,13 +406,13 @@ class _PaginaCamposState extends State<PaginaCampos> {
       await dir.create(recursive: true);
     }
 
-    final fecha = DateTime.now().toIso8601String().split('T')[0];
-    final hora = DateTime.now().hour.toString().padLeft(2, '0') +
-                 DateTime.now().minute.toString().padLeft(2, '0');
-    final file = File('${dir.path}/JARVIS_${fecha}_$hora.txt');
+    // Limpiar nombre: quita caracteres raros
+    final nombreLimpio = nombreArchivo.replaceAll(RegExp(r'[^\w\s-]'), '');
+    final file = File('${dir.path}/$nombreLimpio.csv');
 
     await file.writeAsString(lineaExcel, flush: true);
-    _snack('Guardado en: Descargas/JARVIS_${fecha}_$hora.txt');
+    _snack('Guardado: $nombreLimpio.csv');
+    
   } catch (e) {
     _snack('Error al guardar: $e');
   }
