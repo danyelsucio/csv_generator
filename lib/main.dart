@@ -86,6 +86,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -149,7 +151,7 @@ class _HomePageState extends State<HomePage> {
 
   List<PedidoCarpeta> _getPendientes() {
     return _pedidos.where((p) =>
-    !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
+   !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
     ).toList();
   }
 
@@ -194,7 +196,8 @@ class _HomePageState extends State<HomePage> {
 
 
 
-  @override
+
+   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -276,7 +279,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildListaPedidos() {
     return _pedidos.isEmpty
- ? const Center(child: Text('Sin pedidos\nPica ESCANEAR pa empezar',
+? const Center(child: Text('Sin pedidos\nPica ESCANEAR pa empezar',
         style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
       : ListView.builder(
           itemCount: _pedidos.length,
@@ -294,10 +297,12 @@ class _HomePageState extends State<HomePage> {
               child: Card(
                 color: Colors.grey[900],
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: ListTile(
-                  title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SelectableText(
+                    'CARPETA: ${p.carpeta}\nFolio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                    style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                  ),
                 ),
               ),
             );
@@ -307,7 +312,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildListaRecibidos() {
     return _recibidos.isEmpty
- ? const Center(child: Text('Sin recibidos\nEscanea una carpeta pedida',
+? const Center(child: Text('Sin recibidos\nEscanea una carpeta pedida',
         style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
       : ListView.builder(
           itemCount: _recibidos.length,
@@ -316,11 +321,12 @@ class _HomePageState extends State<HomePage> {
             return Card(
               color: Colors.grey[900],
               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: ListTile(
-                leading: const Icon(Icons.check_circle, color: Colors.green, size: 32),
-                title: Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText(
+                  'CARPETA: ${r.carpeta}\nFolio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                  style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                ),
               ),
             );
           },
@@ -330,7 +336,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildListaPendientes() {
     final pendientes = _getPendientes();
     return pendientes.isEmpty
- ? const Center(child: Text('No hay pendientes 👍\nTodo recibido',
+? const Center(child: Text('No hay pendientes 👍\nTodo recibido',
         style: TextStyle(color: Colors.green, fontSize: 16), textAlign: TextAlign.center))
       : ListView.builder(
           itemCount: pendientes.length,
@@ -339,17 +345,21 @@ class _HomePageState extends State<HomePage> {
             return Card(
               color: Colors.grey[900],
               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: ListTile(
-                leading: const Icon(Icons.pending, color: Colors.orange, size: 32),
-                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText(
+                  'CARPETA: ${p.carpeta}\nFolio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                  style: const TextStyle(color: Colors.orange, fontSize: 15, height: 1.4),
+                ),
               ),
             );
           },
         );
   }
 }
+
+
+
 
 // ========== PANTALLA NUEVA: TEXTO COMPLETO ==========
 class PantallaTextoCompleto extends StatefulWidget {
@@ -532,10 +542,7 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
     );
   }
 
-
-
-
-    @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -712,7 +719,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -728,7 +735,3 @@ class _CameraScreenState extends State<CameraScreen> {
 
 
 
-
-
-
-  
