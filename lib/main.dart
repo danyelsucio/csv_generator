@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:convert';
 
@@ -88,6 +89,8 @@ class MyApp extends StatelessWidget {
 
 
 
+
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -97,7 +100,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   List<PedidoCarpeta> _pedidos = [];
   List<RecibidoCarpeta> _recibidos = [];
-  int _tabIndex = 0; // 0=Pedidos, 1=Recibidos, 2=Pendientes
+  int _tabIndex = 0;
 
   @override
   void initState() {
@@ -151,7 +154,7 @@ class _HomePageState extends State<HomePage> {
 
   List<PedidoCarpeta> _getPendientes() {
     return _pedidos.where((p) =>
-   !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
+  !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
     ).toList();
   }
 
@@ -194,20 +197,197 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _mostrarDialogoAgregarManual() {
+    final ctrlCarpeta = TextEditingController();
+    final ctrlFolio = TextEditingController();
+    final ctrlVolante = TextEditingController();
+    String destinoSeleccionado = 'Noti';
+    String tipo = 'PEDIDO';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('AGREGAR MANUAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButton<String>(
+                  value: tipo,
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white),
+                  items: ['PEDIDO', 'RECIBIDO'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (v) => setDialogState(() => tipo = v!),
+                ),
+                TextField(controller: ctrlCarpeta, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'CARPETA', labelStyle: TextStyle(color: Colors.white70))),
+                TextField(controller: ctrlFolio, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'FOLIO', labelStyle: TextStyle(color: Colors.white70))),
+                TextField(controller: ctrlVolante, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'VOLANTE', labelStyle: TextStyle(color: Colors.white70))),
+                if (tipo == 'PEDIDO')...[
+                  const SizedBox(height: 12),
+                  const Text('¿SE ENVIÓ A?', style: TextStyle(color: Colors.white70)),
+                  DropdownButton<String>(
+                    value: destinoSeleccionado,
+                    dropdownColor: Colors.grey[900],
+                    style: const TextStyle(color: Colors.white),
+                    items: ['Noti', 'Mesa de Control'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    onChanged: (v) => setDialogState(() => destinoSeleccionado = v!),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
+            TextButton(
+              onPressed: () {
+                if (ctrlCarpeta.text.isEmpty || ctrlFolio.text.isEmpty || ctrlVolante.text.isEmpty) {
+                  _snack('Llena todos los campos');
+                  return;
+                }
+                if (tipo == 'PEDIDO') {
+                  setState(() => _pedidos.add(PedidoCarpeta(
+                    carpeta: ctrlCarpeta.text.trim(),
+                    folio: ctrlFolio.text.trim(),
+                    volante: ctrlVolante.text.trim(),
+                    destino: destinoSeleccionado,
+                    fechaPedido: _fechaHoy(),
+                  )));
+                } else {
+                  setState(() => _recibidos.add(RecibidoCarpeta(
+                    carpeta: ctrlCarpeta.text.trim(),
+                    folio: ctrlFolio.text.trim(),
+                    volante: ctrlVolante.text.trim(),
+                    fechaRecibido: _fechaHoy(),
+                  )));
+                }
+                _guardarDatos();
+                Navigator.pop(context);
+                _snack('$tipo guardado');
+              },
+              child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editarPedido(int index) {
+    final p = _pedidos[index];
+    final ctrlCarpeta = TextEditingController(text: p.carpeta);
+    final ctrlFolio = TextEditingController(text: p.folio);
+    final ctrlVolante = TextEditingController(text: p.volante);
+    String destinoSeleccionado = p.destino;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('EDITAR PEDIDO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: ctrlCarpeta, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'CARPETA', labelStyle: TextStyle(color: Colors.white70))),
+                TextField(controller: ctrlFolio, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'FOLIO', labelStyle: TextStyle(color: Colors.white70))),
+                TextField(controller: ctrlVolante, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'VOLANTE', labelStyle: TextStyle(color: Colors.white70))),
+                DropdownButton<String>(
+                  value: destinoSeleccionado,
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white),
+                  items: ['Noti', 'Mesa de Control'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (v) => setDialogState(() => destinoSeleccionado = v!),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _pedidos[index] = PedidoCarpeta(
+                    carpeta: ctrlCarpeta.text.trim(),
+                    folio: ctrlFolio.text.trim(),
+                    volante: ctrlVolante.text.trim(),
+                    destino: destinoSeleccionado,
+                    fechaPedido: p.fechaPedido,
+                  );
+                });
+                _guardarDatos();
+                Navigator.pop(context);
+                _snack('Pedido actualizado');
+              },
+              child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editarRecibido(int index) {
+    final r = _recibidos[index];
+    final ctrlCarpeta = TextEditingController(text: r.carpeta);
+    final ctrlFolio = TextEditingController(text: r.folio);
+    final ctrlVolante = TextEditingController(text: r.volante);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('EDITAR RECIBIDO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: ctrlCarpeta, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'CARPETA', labelStyle: TextStyle(color: Colors.white70))),
+              TextField(controller: ctrlFolio, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'FOLIO', labelStyle: TextStyle(color: Colors.white70))),
+              TextField(controller: ctrlVolante, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'VOLANTE', labelStyle: TextStyle(color: Colors.white70))),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _recibidos[index] = RecibidoCarpeta(
+                  carpeta: ctrlCarpeta.text.trim(),
+                  folio: ctrlFolio.text.trim(),
+                  volante: ctrlVolante.text.trim(),
+                  fechaRecibido: r.fechaRecibido,
+                );
+              });
+              _guardarDatos();
+              Navigator.pop(context);
+              _snack('Recibido actualizado');
+            },
+            child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
+    );
+  }
 
 
 
-   @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text(
-          'Control Carpetas MP',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Control Carpetas MP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Colors.white, size: 28),
+            onPressed: _mostrarDialogoAgregarManual,
+            tooltip: 'Agregar Manual',
+          ),
           IconButton(
             icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
             onPressed: _abrirCamara,
@@ -217,7 +397,6 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          // ========== TABS ==========
           Container(
             color: Colors.grey[900],
             child: Row(
@@ -228,7 +407,6 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-          // ========== LISTA ==========
           Expanded(child: _buildTabContent()),
         ],
       ),
@@ -279,14 +457,14 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildListaPedidos() {
     return _pedidos.isEmpty
-? const Center(child: Text('Sin pedidos\nPica ESCANEAR pa empezar',
+? const Center(child: Text('Sin pedidos\nPica ESCANEAR o + pa agregar',
         style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
       : ListView.builder(
           itemCount: _pedidos.length,
           itemBuilder: (context, i) {
             final p = _pedidos[i];
             return Dismissible(
-              key: Key(p.carpeta + p.fechaPedido),
+              key: Key('${p.carpeta}${p.fechaPedido}$i'),
               direction: DismissDirection.endToStart,
               background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
               onDismissed: (dir) {
@@ -297,11 +475,13 @@ class _HomePageState extends State<HomePage> {
               child: Card(
                 color: Colors.grey[900],
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SelectableText(
-                    'CARPETA: ${p.carpeta}\nFolio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                    style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                child: ListTile(
+                  title: SelectableText('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  subtitle: SelectableText('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blue),
+                    onPressed: () => _editarPedido(i),
                   ),
                 ),
               ),
@@ -312,20 +492,32 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildListaRecibidos() {
     return _recibidos.isEmpty
-? const Center(child: Text('Sin recibidos\nEscanea una carpeta pedida',
+? const Center(child: Text('Sin recibidos\nEscanea o agrega manual',
         style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
       : ListView.builder(
           itemCount: _recibidos.length,
           itemBuilder: (context, i) {
             final r = _recibidos[i];
-            return Card(
-              color: Colors.grey[900],
-              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SelectableText(
-                  'CARPETA: ${r.carpeta}\nFolio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
-                  style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+            return Dismissible(
+              key: Key('${r.carpeta}${r.fechaRecibido}$i'),
+              direction: DismissDirection.endToStart,
+              background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
+              onDismissed: (dir) {
+                setState(() => _recibidos.removeAt(i));
+                _guardarDatos();
+                _snack('Recibido eliminado');
+              },
+              child: Card(
+                color: Colors.grey[900],
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: ListTile(
+                  title: SelectableText('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: SelectableText('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blue),
+                    onPressed: () => _editarRecibido(i),
+                  ),
                 ),
               ),
             );
@@ -342,14 +534,27 @@ class _HomePageState extends State<HomePage> {
           itemCount: pendientes.length,
           itemBuilder: (context, i) {
             final p = pendientes[i];
-            return Card(
-              color: Colors.grey[900],
-              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SelectableText(
-                  'CARPETA: ${p.carpeta}\nFolio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                  style: const TextStyle(color: Colors.orange, fontSize: 15, height: 1.4),
+            final indexOriginal = _pedidos.indexWhere((e) => e.carpeta == p.carpeta);
+            return Dismissible(
+              key: Key('${p.carpeta}${p.fechaPedido}$i'),
+              direction: DismissDirection.endToStart,
+              background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
+              onDismissed: (dir) {
+                setState(() => _pedidos.removeAt(indexOriginal));
+                _guardarDatos();
+                _snack('Pedido eliminado');
+              },
+              child: Card(
+                color: Colors.grey[900],
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: ListTile(
+                  title: SelectableText('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                  subtitle: SelectableText('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blue),
+                    onPressed: () => _editarPedido(indexOriginal),
+                  ),
                 ),
               ),
             );
@@ -357,6 +562,7 @@ class _HomePageState extends State<HomePage> {
         );
   }
 }
+
 
 
 
@@ -556,7 +762,6 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
       ),
       body: Column(
         children: [
-          // ========== INSTRUCCIONES ==========
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -567,7 +772,6 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
               textAlign: TextAlign.center,
             ),
           ),
-          // ========== TEXTO COMPLETO EDITABLE ==========
           Expanded(
             child: Container(
               margin: const EdgeInsets.all(12),
@@ -591,7 +795,6 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
               ),
             ),
           ),
-          // ========== BOTONES ACCIÓN ==========
           Container(
             padding: const EdgeInsets.all(12),
             color: Colors.grey[900],
@@ -719,7 +922,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+         ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -730,8 +933,4 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-
-
-
-
 
