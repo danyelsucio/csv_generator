@@ -38,16 +38,19 @@ class PedidoCarpeta {
   );
 }
 
+// Fix 1: Agregué destino a RecibidoCarpeta
 class RecibidoCarpeta {
   final String carpeta;
   final String folio;
   final String volante;
+  final String destino; // <-- NUEVO
   final String fechaRecibido;
 
   RecibidoCarpeta({
     required this.carpeta,
     required this.folio,
     required this.volante,
+    required this.destino, // <-- NUEVO
     required this.fechaRecibido,
   });
 
@@ -55,6 +58,7 @@ class RecibidoCarpeta {
     'carpeta': carpeta,
     'folio': folio,
     'volante': volante,
+    'destino': destino, // <-- NUEVO
     'fechaRecibido': fechaRecibido,
   };
 
@@ -62,6 +66,7 @@ class RecibidoCarpeta {
     carpeta: json['carpeta'],
     folio: json['folio'],
     volante: json['volante'],
+    destino: json['destino']?? 'Noti', // <-- NUEVO con fallback por si hay datos viejos
     fechaRecibido: json['fechaRecibido'],
   );
 }
@@ -148,7 +153,6 @@ class _HomePageState extends State<HomePage> {
     return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
   }
 
-  // Fix: normalizar quita saltos, tabs y espacios múltiples
   String _normalizar(String texto) {
     return texto.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
@@ -205,13 +209,12 @@ class _HomePageState extends State<HomePage> {
 
 
 
-
-    void _mostrarDialogoAgregarManual() {
+  // Fix 2: Sin dropdown, tipo automático + validación con alerta
+  void _mostrarDialogoAgregarManual() {
     final ctrlCarpeta = TextEditingController();
     final ctrlFolio = TextEditingController();
     final ctrlVolante = TextEditingController();
     String destinoSeleccionado = 'Noti';
-    // Fix: tipo automático según la pestaña actual - ya no hay dropdown
     String tipo = _tabIndex == 1? 'RECIBIDO' : 'PEDIDO';
 
     void _autocompletar(StateSetter setDialogState) {
@@ -299,6 +302,7 @@ class _HomePageState extends State<HomePage> {
                     fechaPedido: _fechaHoy(),
                   )));
                 } else {
+                  // Fix 2: Valida que exista en pedidos antes de guardar
                   final pedido = _pedidos.firstWhere(
                     (p) => _normalizar(p.carpeta) == carpetaNorm,
                     orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
@@ -317,6 +321,7 @@ class _HomePageState extends State<HomePage> {
                     carpeta: pedido.carpeta,
                     folio: ctrlFolio.text.trim(),
                     volante: ctrlVolante.text.trim(),
+                    destino: pedido.destino, // <-- Guarda el destino del pedido
                     fechaRecibido: _fechaHoy(),
                   )));
                 }
@@ -431,6 +436,7 @@ class _HomePageState extends State<HomePage> {
                   carpeta: ctrlCarpeta.text.trim(),
                   folio: ctrlFolio.text.trim(),
                   volante: ctrlVolante.text.trim(),
+                  destino: r.destino, // <-- Mantiene el destino original
                   fechaRecibido: r.fechaRecibido,
                 );
               });
@@ -568,6 +574,7 @@ class _HomePageState extends State<HomePage> {
         );
   }
 
+  // Fix 1: Ahora muestra Destino en RECIBIDOS
   Widget _buildListaRecibidos() {
     return _recibidos.isEmpty
 ? const Center(child: Text('Sin recibidos\nEscanea o agrega manual',
@@ -595,7 +602,7 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                        Text('Folio: ${r.folio}\nVolante: ${r.volante}\nDestino: ${r.destino}\nRecibido: ${r.fechaRecibido}',
                           style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       ],
                     ),
@@ -656,11 +663,6 @@ class _HomePageState extends State<HomePage> {
         );
   }
 }
-
-
-
-
-
 
 
 
@@ -778,6 +780,7 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
       carpeta: pedido.carpeta,
       folio: pedido.folio,
       volante: pedido.volante,
+      destino: pedido.destino,
       fechaRecibido: _fechaHoy(),
     ));
     Navigator.pop(context);
@@ -1034,7 +1037,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
- ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -1047,3 +1050,4 @@ class _CameraScreenState extends State<CameraScreen> {
 }
 
 
+  
