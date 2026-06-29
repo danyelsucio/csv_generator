@@ -31,5 +31,5 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: false
-  image_path: "assets/icon/gato.png" # 👈 AQUÍ PONES TU ARCHIVO
+  image_path: "assets/icon/gato1.png" # 👈 AQUÍ PONES TU ARCHIVO
   min_sdk_android: 21
