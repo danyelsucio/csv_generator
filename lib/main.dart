@@ -88,6 +88,9 @@ class MyApp extends StatelessWidget {
 }
 
 
+
+
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -269,6 +272,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ],
             ),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
             TextButton(
@@ -369,6 +373,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
             TextButton(
@@ -437,6 +442,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
 
 
 
@@ -627,6 +633,8 @@ class _HomePageState extends State<HomePage> {
         );
   }
 }
+
+
 
 
 
@@ -999,7 +1007,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -1010,4 +1018,6 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-      
+
+
+
