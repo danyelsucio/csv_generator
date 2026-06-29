@@ -4,6 +4,68 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
+import 'dart:convert';
+
+// ========== NUEVO: MODELOS PA CONTROL DE CARPETAS ==========
+class PedidoCarpeta {
+  final String carpeta;
+  final String folio;
+  final String volante;
+  final String destino; // "Noti" o "Mesa de Control"
+  final String fechaPedido;
+
+  PedidoCarpeta({
+    required this.carpeta,
+    required this.folio,
+    required this.volante,
+    required this.destino,
+    required this.fechaPedido,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'carpeta': carpeta,
+    'folio': folio,
+    'volante': volante,
+    'destino': destino,
+    'fechaPedido': fechaPedido,
+  };
+
+  factory PedidoCarpeta.fromJson(Map<String, dynamic> json) => PedidoCarpeta(
+    carpeta: json['carpeta'],
+    folio: json['folio'],
+    volante: json['volante'],
+    destino: json['destino'],
+    fechaPedido: json['fechaPedido'],
+  );
+}
+
+class RecibidoCarpeta {
+  final String carpeta;
+  final String folio;
+  final String volante;
+  final String fechaRecibido;
+
+  RecibidoCarpeta({
+    required this.carpeta,
+    required this.folio,
+    required this.volante,
+    required this.fechaRecibido,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'carpeta': carpeta,
+    'folio': folio,
+    'volante': volante,
+    'fechaRecibido': fechaRecibido,
+  };
+
+  factory RecibidoCarpeta.fromJson(Map<String, dynamic> json) => RecibidoCarpeta(
+    carpeta: json['carpeta'],
+    folio: json['folio'],
+    volante: json['volante'],
+    fechaRecibido: json['fechaRecibido'],
+  );
+}
 
 // ORDEN EXACTO PA EL TXT/EXCEL
 const List<String> CAMPOS_ORDEN = [
@@ -32,14 +94,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Adry CSV',
+      title: 'Adry CSV - Control Carpetas',
       theme: ThemeData.dark(),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
-
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -51,19 +112,67 @@ class _HomePageState extends State<HomePage> {
   String _textoEscaneado = '';
   final TextEditingController _textoController = TextEditingController();
 
-  // AQUÍ GUARDAMOS TODOS LOS CAMPOS
+  // AQUÍ GUARDAMOS TODOS LOS CAMPOS DEL CSV ORIGINAL
   Map<String, String> _valoresCampos = {};
+
+  // ========== NUEVO: LISTAS PA CONTROL DE CARPETAS ==========
+  List<PedidoCarpeta> _pedidos = [];
+  List<RecibidoCarpeta> _recibidos = [];
+
+  // PA SABER QUÉ TAB ESTÁ ACTIVO: 0=CSV, 1=Pedidos, 2=Recibidos, 3=Pendientes
+  int _tabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Inicializar todos los campos vacíos
+    // Inicializar todos los campos vacíos del CSV
     for (var campo in CAMPOS_ORDEN) {
       _valoresCampos[campo] = '';
     }
     // Los booleanos inician en false
     for (var campo in CAMPOS_BOOL) {
       _valoresCampos[campo] = 'false';
+    }
+    _cargarDatosCarpetas(); // NUEVO: Cargar pedidos/recibidos guardados
+  }
+
+  // ========== NUEVO: PERSISTENCIA LOCAL ==========
+  Future<void> _cargarDatosCarpetas() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final filePedidos = File('${dir.path}/pedidos.json');
+      final fileRecibidos = File('${dir.path}/recibidos.json');
+
+      if (await filePedidos.exists()) {
+        final data = await filePedidos.readAsString();
+        final List<dynamic> jsonList = jsonDecode(data);
+        setState(() {
+          _pedidos = jsonList.map((e) => PedidoCarpeta.fromJson(e)).toList();
+        });
+      }
+
+      if (await fileRecibidos.exists()) {
+        final data = await fileRecibidos.readAsString();
+        final List<dynamic> jsonList = jsonDecode(data);
+        setState(() {
+          _recibidos = jsonList.map((e) => RecibidoCarpeta.fromJson(e)).toList();
+        });
+      }
+    } catch (e) {
+      print('Error cargando datos: $e');
+    }
+  }
+
+  Future<void> _guardarDatosCarpetas() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final filePedidos = File('${dir.path}/pedidos.json');
+      final fileRecibidos = File('${dir.path}/recibidos.json');
+
+      await filePedidos.writeAsString(jsonEncode(_pedidos.map((e) => e.toJson()).toList()));
+      await fileRecibidos.writeAsString(jsonEncode(_recibidos.map((e) => e.toJson()).toList()));
+    } catch (e) {
+      _snack('Error guardando: $e');
     }
   }
 
@@ -151,11 +260,147 @@ class _HomePageState extends State<HomePage> {
     if (seleccion.isValid &&!seleccion.isCollapsed) {
       textoSeleccionado = seleccion.textInside(_textoController.text);
     }
-    _mostrarBottomSheetCampos(textoSeleccionado);
+
+    // NUEVO: Si estamos en tab de Pedidos o Recibidos, abre flujo especial
+    if (_tabIndex == 1) {
+      _mostrarDialogoPedido(textoSeleccionado);
+    } else if (_tabIndex == 2) {
+      _procesarRecibido(textoSeleccionado);
+    } else {
+      _mostrarBottomSheetCampos(textoSeleccionado);
+    }
+  }
+
+  // ========== NUEVO: FLUJO PEDIDOS ==========
+  void _mostrarDialogoPedido(String carpetaPreseleccionada) {
+    if (carpetaPreseleccionada.isEmpty) {
+      _snack('Selecciona el número de carpeta primero');
+      return;
+    }
+
+    final ctrlFolio = TextEditingController();
+    final ctrlVolante = TextEditingController();
+    String destinoSeleccionado = 'Noti';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('NUEVO PEDIDO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('CARPETA: $carpetaPreseleccionada', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrlFolio,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'FOLIO',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
+                  ),
+                ),
+                TextField(
+                  controller: ctrlVolante,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'VOLANTE',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.red)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('¿SE ENVIÓ A?', style: TextStyle(color: Colors.white70)),
+                DropdownButton<String>(
+                  value: destinoSeleccionado,
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white),
+                  items: ['Noti', 'Mesa de Control'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (v) => setDialogState(() => destinoSeleccionado = v!),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
+            TextButton(
+              onPressed: () {
+                if (ctrlFolio.text.isEmpty || ctrlVolante.text.isEmpty) {
+                  _snack('Llena folio y volante');
+                  return;
+                }
+                setState(() {
+                  _pedidos.add(PedidoCarpeta(
+                    carpeta: carpetaPreseleccionada,
+                    folio: ctrlFolio.text.trim(),
+                    volante: ctrlVolante.text.trim(),
+                    destino: destinoSeleccionado,
+                    fechaPedido: DateTime.now().toString().substring(0, 16),
+                  ));
+                });
+                _guardarDatosCarpetas();
+                Navigator.pop(context);
+                _snack('Pedido guardado: $carpetaPreseleccionada');
+              },
+              child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
 
-    void _mostrarBottomSheetCampos(String textoSeleccionado) {
+
+    // ========== NUEVO: FLUJO RECIBIDOS ==========
+  void _procesarRecibido(String carpetaSeleccionada) {
+    if (carpetaSeleccionada.isEmpty) {
+      _snack('Selecciona el número de carpeta primero');
+      return;
+    }
+
+    final pedido = _pedidos.firstWhere(
+      (p) => p.carpeta.trim().toLowerCase() == carpetaSeleccionada.trim().toLowerCase(),
+      orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
+    );
+
+    if (pedido.carpeta.isEmpty) {
+      _snack('No esta no la pediste');
+      return;
+    }
+
+    // Si ya está recibida, avisar
+    final yaRecibida = _recibidos.any((r) => r.carpeta.trim().toLowerCase() == carpetaSeleccionada.trim().toLowerCase());
+    if (yaRecibida) {
+      _snack('Esta carpeta ya fue recibida');
+      return;
+    }
+
+    // Prellenar y guardar en recibidos
+    setState(() {
+      _recibidos.add(RecibidoCarpeta(
+        carpeta: pedido.carpeta,
+        folio: pedido.folio,
+        volante: pedido.volante,
+        fechaRecibido: DateTime.now().toString().substring(0, 16),
+      ));
+    });
+    _guardarDatosCarpetas();
+    _snack('Recibida: ${pedido.carpeta} | Folio: ${pedido.folio}');
+  }
+
+  // ========== NUEVO: LISTA DE PENDIENTES ==========
+  List<PedidoCarpeta> _getPendientes() {
+    return _pedidos.where((p) =>
+     !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
+    ).toList();
+  }
+
+  void _mostrarBottomSheetCampos(String textoSeleccionado) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.grey[900],
@@ -168,7 +413,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(
                 textoSeleccionado.isEmpty
-               ? 'SELECCIONA UN CAMPO'
+              ? 'SELECCIONA UN CAMPO'
                   : 'Texto: "${textoSeleccionado.length > 30? '${textoSeleccionado.substring(0, 30)}...' : textoSeleccionado}"',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
@@ -182,7 +427,6 @@ class _HomePageState extends State<HomePage> {
                     final valor = _valoresCampos[campo]?? '';
                     final tieneValor = valor.isNotEmpty && valor!= 'false';
                     final esBool = CAMPOS_BOOL.contains(campo);
-                    // CAMBIO: AHORA FECHA Y RECEPCION USAN CALENDARIO
                     final esFecha = campo == 'FECHA' || campo == 'RECEPCION';
 
                     return ListTile(
@@ -195,7 +439,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       subtitle: esBool
-                     ? Text(valor == 'true'? 'TRUE' : 'FALSE',
+                    ? Text(valor == 'true'? 'TRUE' : 'FALSE',
                             style: TextStyle(color: valor == 'true'? Colors.green : Colors.white54))
                         : Text(valor.isEmpty? 'Vacío' : valor,
                             style: const TextStyle(color: Colors.white54, fontSize: 12),
@@ -230,7 +474,6 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                       onTap: esBool? null : () {
-                        // Si es FECHA o RECEPCION, abre calendario
                         if (esFecha) {
                           _abrirDatePicker(campo, setModalState);
                           return;
@@ -283,6 +526,142 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  // ========== NUEVO: WIDGET PA CADA TAB ==========
+  Widget _buildTabContent() {
+    switch (_tabIndex) {
+      case 1: // PEDIDOS
+        return _buildListaPedidos();
+      case 2: // RECIBIDOS
+        return _buildListaRecibidos();
+      case 3: // PENDIENTES
+        return _buildListaPendientes();
+      default: // CSV ORIGINAL
+        return _buildTabCSV();
+    }
+  }
+
+  Widget _buildTabCSV() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'TEXTO ESCANEADO - Selecciona y pica +',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              border: Border.all(color: Colors.red[900]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: _textoEscaneado.isEmpty
+             ? const Center(
+                  child: Text(
+                    'Pica el icono de la cámara pa escanear...',
+                    style: TextStyle(color: Colors.white38, fontSize: 16),
+                  ),
+                )
+                : TextField(
+                  controller: _textoController,
+                  readOnly: false,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: 'Texto escaneado...',
+                    hintStyle: TextStyle(color: Colors.white38),
+                  ),
+                  onChanged: (v) {
+                    _textoEscaneado = v;
+                  },
+                ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Campos llenos: ${_valoresCampos.values.where((v) => v.isNotEmpty && v!= 'false').length}/${CAMPOS_ORDEN.length}',
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildListaPedidos() {
+    return _pedidos.isEmpty
+     ? const Center(child: Text('Sin pedidos aún\nEscanea y selecciona carpeta + botón PEDIDOS',
+          style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: _pedidos.length,
+          itemBuilder: (context, i) {
+            final p = _pedidos[i];
+            return Card(
+              color: Colors.grey[900],
+              child: ListTile(
+                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\n${p.fechaPedido}',
+                  style: const TextStyle(color: Colors.white70)),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () {
+                    setState(() => _pedidos.removeAt(i));
+                    _guardarDatosCarpetas();
+                  },
+                ),
+              ),
+            );
+          },
+        );
+  }
+
+  Widget _buildListaRecibidos() {
+    return _recibidos.isEmpty
+     ? const Center(child: Text('Sin recibidos aún\nEscanea carpeta pedida + botón RECIBIDOS',
+          style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: _recibidos.length,
+          itemBuilder: (context, i) {
+            final r = _recibidos[i];
+            return Card(
+              color: Colors.grey[900],
+              child: ListTile(
+                leading: const Icon(Icons.check_circle, color: Colors.green),
+                title: Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                  style: const TextStyle(color: Colors.white70)),
+              ),
+            );
+          },
+        );
+  }
+
+  Widget _buildListaPendientes() {
+    final pendientes = _getPendientes();
+    return pendientes.isEmpty
+     ? const Center(child: Text('No hay pendientes\nTodo recibido 👍',
+          style: TextStyle(color: Colors.green), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: pendientes.length,
+          itemBuilder: (context, i) {
+            final p = pendientes[i];
+            return Card(
+              color: Colors.grey[900],
+              child: ListTile(
+                leading: const Icon(Icons.pending, color: Colors.orange),
+                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                  style: const TextStyle(color: Colors.white70)),
+              ),
+            );
+          },
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -294,21 +673,18 @@ class _HomePageState extends State<HomePage> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
-          // BOTÓN SHOW
-          TextButton(
-            onPressed: _verCampos,
-            child: const Text(
-              'SHOW',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          // SOLO EN TAB CSV MOSTRAMOS SHOW Y +
+          if (_tabIndex == 0)...[
+            TextButton(
+              onPressed: _verCampos,
+              child: const Text('SHOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
-          ),
-          // BOTÓN +
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white, size: 28),
-            onPressed: _abrirMenuCampos,
-            tooltip: 'Asignar a campo',
-          ),
-          // BOTÓN CÁMARA
+            IconButton(
+              icon: const Icon(Icons.add, color: Colors.white, size: 28),
+              onPressed: _abrirMenuCampos,
+              tooltip: 'Asignar a campo',
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
             onPressed: _abrirCamara,
@@ -318,54 +694,69 @@ class _HomePageState extends State<HomePage> {
       body: Container(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'TEXTO ESCANEADO - Selecciona y pica +',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  border: Border.all(color: Colors.red[900]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: _textoEscaneado.isEmpty
-              ? const Center(
-                      child: Text(
-                        'Pica el icono de la cámara pa escanear...',
-                        style: TextStyle(color: Colors.white38, fontSize: 16),
-                      ),
-                    )
-                    : TextField(
-                      controller: _textoController,
-                      readOnly: false,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Texto escaneado...',
-                        hintStyle: TextStyle(color: Colors.white38),
-                      ),
-                      onChanged: (v) {
-                        _textoEscaneado = v;
-                      },
-                    ),
+            // ========== NUEVO: MENU DE TABS ==========
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  _buildTabButton('CSV', 0),
+                  _buildTabButton('PEDIDOS', 1),
+                  _buildTabButton('RECIBIDOS', 2),
+                  _buildTabButton('PENDIENTES', 3),
+                ],
               ),
             ),
+            const SizedBox(height: 12),
+            // TEXTO DE AYUDA SEGÚN TAB
+            if (_tabIndex == 1)
+              const Text('Selecciona número de carpeta en el texto y pica +',
+                style: TextStyle(color: Colors.yellow, fontSize: 12)),
+            if (_tabIndex == 2)
+              const Text('Selecciona número de carpeta pedida y pica +',
+                style: TextStyle(color: Colors.yellow, fontSize: 12)),
+            if (_tabIndex == 3)
+              Text('Pendientes: ${_getPendientes().length}',
+                style: const TextStyle(color: Colors.orange, fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            // CONTADOR DE CAMPOS LLENOS
-            Text(
-              'Campos llenos: ${_valoresCampos.values.where((v) => v.isNotEmpty && v!= 'false').length}/${CAMPOS_ORDEN.length}',
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-            ),
+            Expanded(child: _buildTabContent()),
           ],
+        ),
+      ),
+      // ========== NUEVO: BOTÓN + FLOTANTE PA PEDIDOS/RECIBIDOS ==========
+      floatingActionButton: _tabIndex == 1 || _tabIndex == 2
+       ? FloatingActionButton(
+            backgroundColor: Colors.red[900],
+            onPressed: _abrirMenuCampos,
+            child: const Icon(Icons.add, color: Colors.white),
+          )
+        : null,
+    );
+  }
+
+  Widget _buildTabButton(String texto, int index) {
+    final activo = _tabIndex == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _tabIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: activo? Colors.red[900] : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            texto,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: activo? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+          ),
         ),
       ),
     );
@@ -373,7 +764,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 
-// PÁGINA SHOW - VER TODOS LOS CAMPOS + GUARDAR
+// PÁGINA SHOW - VER TODOS LOS CAMPOS + GUARDAR (SIN CAMBIOS)
 class PaginaCampos extends StatefulWidget {
   final Map<String, String> valoresCampos;
   final Function(Map<String, String>) onGuardar;
@@ -399,7 +790,6 @@ class _PaginaCamposState extends State<PaginaCampos> {
 
   Future<void> _guardarTxt() async {
   try {
-    // CAMPO VACÍO POR DEFAULT
     final ctrlNombre = TextEditingController();
 
     final nombreArchivo = await showDialog<String>(
@@ -433,13 +823,11 @@ class _PaginaCamposState extends State<PaginaCampos> {
       ),
     );
 
-    // Si canceló o está vacío, nos salimos
     if (nombreArchivo == null || nombreArchivo.isEmpty) {
       _snack('Debes poner un nombre');
       return;
     }
 
-    // 2. PEDIR PERMISOS
     if (Platform.isAndroid) {
       if (await Permission.manageExternalStorage.request().isDenied) {
         _snack('Ocupas dar permiso en Ajustes');
@@ -448,7 +836,6 @@ class _PaginaCamposState extends State<PaginaCampos> {
       }
     }
 
-    // 3. GENERAR CSV CON COMILLAS
     final valoresOrdenados = CAMPOS_ORDEN.map((campo) {
       final valor = _valoresTemp[campo]?? '';
       return '"${valor.replaceAll('"', '""')}"';
@@ -456,7 +843,6 @@ class _PaginaCamposState extends State<PaginaCampos> {
 
     final lineaExcel = valoresOrdenados.join(',');
 
-    // 4. GUARDAR CON EL NOMBRE QUE PUSO
     Directory? dir;
     if (Platform.isAndroid) {
       dir = Directory('/storage/emulated/0/Download');
@@ -468,7 +854,6 @@ class _PaginaCamposState extends State<PaginaCampos> {
       await dir.create(recursive: true);
     }
 
-    // Limpiar nombre: quita caracteres raros
     final nombreLimpio = nombreArchivo.replaceAll(RegExp(r'[^\w\s-]'), '');
     final file = File('${dir.path}/$nombreLimpio.csv');
 
@@ -536,7 +921,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: esBool
-             ? Switch(
+           ? Switch(
                       value: valor == 'true',
                       activeColor: Colors.green,
                       onChanged: (v) {
@@ -591,7 +976,7 @@ class _PaginaCamposState extends State<PaginaCampos> {
   }
 }
 
-// PANTALLA DE CÁMARA + OCR - SOLO EXTRAE TEXTO
+// PANTALLA DE CÁMARA + OCR - SOLO EXTRAE TEXTO (SIN CAMBIOS)
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -675,7 +1060,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 child: _procesando
-            ? const CircularProgressIndicator(color: Colors.white)
+          ? const CircularProgressIndicator(color: Colors.white)
                     : const Icon(Icons.camera, size: 32, color: Colors.white),
               ),
             ),
@@ -685,3 +1070,10 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
+
+
+
+
+
+
+
