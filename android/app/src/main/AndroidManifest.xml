@@ -9,7 +9,7 @@
 
     <!-- Para Android 11+ el file_picker lo necesita -->
     <application
-        android:label="Adrianita CSV"
+        android:label="Adry pedidos"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true"
