@@ -87,7 +87,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -149,8 +148,9 @@ class _HomePageState extends State<HomePage> {
     return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
   }
 
+  // Fix: normalizar quita saltos, tabs y espacios múltiples
   String _normalizar(String texto) {
-    return texto.trim().toLowerCase().replaceAll(' ', '');
+    return texto.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
 
   List<PedidoCarpeta> _getPendientes() {
@@ -201,6 +201,10 @@ class _HomePageState extends State<HomePage> {
 
 
 
+
+
+
+
    void _mostrarDialogoAgregarManual() {
     final ctrlCarpeta = TextEditingController();
     final ctrlFolio = TextEditingController();
@@ -208,7 +212,7 @@ class _HomePageState extends State<HomePage> {
     String destinoSeleccionado = 'Noti';
     String tipo = 'PEDIDO';
 
-    void _autocompletar() {
+    void _autocompletar(StateSetter setDialogState) {
       final carpetaNorm = _normalizar(ctrlCarpeta.text);
       if (carpetaNorm.isEmpty) return;
 
@@ -218,10 +222,17 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (pedidoExistente.carpeta.isNotEmpty) {
-        ctrlFolio.text = pedidoExistente.folio;
-        ctrlVolante.text = pedidoExistente.volante;
-        destinoSeleccionado = pedidoExistente.destino;
+        setDialogState(() {
+          ctrlFolio.text = pedidoExistente.folio;
+          ctrlVolante.text = pedidoExistente.volante;
+          destinoSeleccionado = pedidoExistente.destino;
+        });
         _snack('Datos autocompletados');
+      } else {
+        setDialogState(() {
+          ctrlFolio.clear();
+          ctrlVolante.clear();
+        });
       }
     }
 
@@ -244,6 +255,7 @@ class _HomePageState extends State<HomePage> {
                     tipo = v!;
                     ctrlFolio.clear();
                     ctrlVolante.clear();
+                    if (tipo == 'RECIBIDO') _autocompletar(setDialogState);
                   }),
                 ),
                 TextField(
@@ -252,8 +264,7 @@ class _HomePageState extends State<HomePage> {
                   decoration: const InputDecoration(labelText: 'CARPETA', labelStyle: TextStyle(color: Colors.white70)),
                   onChanged: (val) {
                     if (tipo == 'RECIBIDO') {
-                      _autocompletar();
-                      setDialogState(() {});
+                      _autocompletar(setDialogState);
                     }
                   },
                 ),
@@ -278,7 +289,7 @@ class _HomePageState extends State<HomePage> {
             TextButton(
               onPressed: () {
                 final carpetaNorm = _normalizar(ctrlCarpeta.text);
-                if (ctrlCarpeta.text.isEmpty || ctrlFolio.text.isEmpty || ctrlVolante.text.isEmpty) {
+                if (ctrlCarpeta.text.trim().isEmpty || ctrlFolio.text.trim().isEmpty || ctrlVolante.text.trim().isEmpty) {
                   _snack('Llena todos los campos');
                   return;
                 }
@@ -443,14 +454,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
-
-
-
-
-
-
-   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -664,6 +668,7 @@ class _HomePageState extends State<HomePage> {
 
 
 
+
 // ========== PANTALLA NUEVA: TEXTO COMPLETO ==========
 class PantallaTextoCompleto extends StatefulWidget {
   final String textoInicial;
@@ -700,7 +705,7 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
   }
 
   String _normalizar(String texto) {
-    return texto.trim().toLowerCase().replaceAll(' ', '');
+    return texto.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
 
   void _snack(String msg) {
@@ -836,7 +841,7 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
             TextButton(
               onPressed: () {
-                if (ctrlFolio.text.isEmpty || ctrlVolante.text.isEmpty) {
+                if (ctrlFolio.text.trim().isEmpty || ctrlVolante.text.trim().isEmpty) {
                   _snack('Llena folio y volante');
                   return;
                 }
@@ -1033,7 +1038,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-     ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
