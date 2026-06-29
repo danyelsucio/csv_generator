@@ -88,9 +88,6 @@ class MyApp extends StatelessWidget {
 }
 
 
-
-
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -201,7 +198,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _mostrarDialogoAgregarManual() {
+
+
+
+   void _mostrarDialogoAgregarManual() {
     final ctrlCarpeta = TextEditingController();
     final ctrlFolio = TextEditingController();
     final ctrlVolante = TextEditingController();
@@ -446,7 +446,11 @@ class _HomePageState extends State<HomePage> {
 
 
 
-    @override
+
+
+
+
+   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -547,9 +551,17 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.grey[900],
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: ListTile(
-                  title: SelectableText('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  subtitle: SelectableText('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  title: SelectionArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                    ),
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.edit, color: Colors.blue),
                     onPressed: () => _editarPedido(i),
@@ -582,9 +594,17 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.grey[900],
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: ListTile(
-                  title: SelectableText('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: SelectableText('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  title: SelectionArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                    ),
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.edit, color: Colors.blue),
                     onPressed: () => _editarRecibido(i),
@@ -619,9 +639,17 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.grey[900],
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: ListTile(
-                  title: SelectableText('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                  subtitle: SelectableText('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  title: SelectionArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                    ),
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.edit, color: Colors.blue),
                     onPressed: () => _editarPedido(indexOriginal),
@@ -633,8 +661,6 @@ class _HomePageState extends State<HomePage> {
         );
   }
 }
-
-
 
 
 
@@ -1007,7 +1033,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+     ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
