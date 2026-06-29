@@ -205,12 +205,14 @@ class _HomePageState extends State<HomePage> {
 
 
 
-   void _mostrarDialogoAgregarManual() {
+
+    void _mostrarDialogoAgregarManual() {
     final ctrlCarpeta = TextEditingController();
     final ctrlFolio = TextEditingController();
     final ctrlVolante = TextEditingController();
     String destinoSeleccionado = 'Noti';
-    String tipo = 'PEDIDO';
+    // Fix: tipo automático según la pestaña actual - ya no hay dropdown
+    String tipo = _tabIndex == 1? 'RECIBIDO' : 'PEDIDO';
 
     void _autocompletar(StateSetter setDialogState) {
       final carpetaNorm = _normalizar(ctrlCarpeta.text);
@@ -241,23 +243,11 @@ class _HomePageState extends State<HomePage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: Colors.grey[900],
-          title: const Text('AGREGAR MANUAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          title: Text('AGREGAR $tipo', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButton<String>(
-                  value: tipo,
-                  dropdownColor: Colors.grey[900],
-                  style: const TextStyle(color: Colors.white),
-                  items: ['PEDIDO', 'RECIBIDO'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (v) => setDialogState(() {
-                    tipo = v!;
-                    ctrlFolio.clear();
-                    ctrlVolante.clear();
-                    if (tipo == 'RECIBIDO') _autocompletar(setDialogState);
-                  }),
-                ),
                 TextField(
                   controller: ctrlCarpeta,
                   style: const TextStyle(color: Colors.white),
@@ -267,6 +257,7 @@ class _HomePageState extends State<HomePage> {
                       _autocompletar(setDialogState);
                     }
                   },
+                  autofocus: true,
                 ),
                 TextField(controller: ctrlFolio, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'FOLIO', labelStyle: TextStyle(color: Colors.white70))),
                 TextField(controller: ctrlVolante, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'VOLANTE', labelStyle: TextStyle(color: Colors.white70))),
@@ -669,6 +660,11 @@ class _HomePageState extends State<HomePage> {
 
 
 
+
+
+
+
+
 // ========== PANTALLA NUEVA: TEXTO COMPLETO ==========
 class PantallaTextoCompleto extends StatefulWidget {
   final String textoInicial;
@@ -1038,7 +1034,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+ ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -1049,6 +1045,5 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-
 
 
