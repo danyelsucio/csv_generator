@@ -5,13 +5,12 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:convert';
 
-// ========== MODELOS SIMPLIFICADOS ==========
 class PedidoCarpeta {
   final String carpeta;
   final String folio;
   final String volante;
-  final String destino; // "Noti" o "Mesa de Control"
-  final String fechaPedido; // DD/MM/YYYY
+  final String destino;
+  final String fechaPedido;
 
   PedidoCarpeta({
     required this.carpeta,
@@ -42,7 +41,7 @@ class RecibidoCarpeta {
   final String carpeta;
   final String folio;
   final String volante;
-  final String fechaRecibido; // DD/MM/YYYY
+  final String fechaRecibido;
 
   RecibidoCarpeta({
     required this.carpeta,
@@ -87,9 +86,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-
-
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -97,14 +93,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String _textoEscaneado = '';
-  final TextEditingController _textoController = TextEditingController();
-
   List<PedidoCarpeta> _pedidos = [];
   List<RecibidoCarpeta> _recibidos = [];
-
-  // 0=Pedidos, 1=Recibidos, 2=Pendientes
-  int _tabIndex = 0;
+  int _tabIndex = 0; // 0=Pedidos, 1=Recibidos, 2=Pendientes
 
   @override
   void initState() {
@@ -112,7 +103,6 @@ class _HomePageState extends State<HomePage> {
     _cargarDatos();
   }
 
-  // ========== PERSISTENCIA ==========
   Future<void> _cargarDatos() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
@@ -152,13 +142,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ========== HELPER FECHA ==========
   String _fechaHoy() {
     final ahora = DateTime.now();
     return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
   }
 
-  // ========== OCR ==========
+  List<PedidoCarpeta> _getPendientes() {
+    return _pedidos.where((p) =>
+    !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
+    ).toList();
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   void _abrirCamara() async {
     if (cameras.isEmpty) {
       _snack('No hay cámaras disponibles');
@@ -169,34 +167,295 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
     if (resultado!= null && resultado.isNotEmpty) {
-      setState(() {
-        _textoEscaneado = resultado;
-        _textoController.text = resultado;
-      });
-      _snack('Texto extraído. Selecciona la carpeta');
+      _abrirPantallaTextoCompleto(resultado);
     }
   }
 
-  void _procesarBotonMas() {
+  void _abrirPantallaTextoCompleto(String textoEscaneado) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PantallaTextoCompleto(
+          textoInicial: textoEscaneado,
+          pedidos: _pedidos,
+          recibidos: _recibidos,
+          onAgregarPedido: (pedido) {
+            setState(() => _pedidos.add(pedido));
+            _guardarDatos();
+          },
+          onAgregarRecibido: (recibido) {
+            setState(() => _recibidos.add(recibido));
+            _guardarDatos();
+          },
+        ),
+      ),
+    );
+  }
+
+
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text(
+          'Control Carpetas MP',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
+            onPressed: _abrirCamara,
+            tooltip: 'Escanear Documento',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ========== TABS ==========
+          Container(
+            color: Colors.grey[900],
+            child: Row(
+              children: [
+                _buildTabButton('PEDIDOS (${_pedidos.length})', 0),
+                _buildTabButton('RECIBIDOS (${_recibidos.length})', 1),
+                _buildTabButton('PENDIENTES (${_getPendientes().length})', 2),
+              ],
+            ),
+          ),
+          // ========== LISTA ==========
+          Expanded(child: _buildTabContent()),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.red[900],
+        onPressed: _abrirCamara,
+        icon: const Icon(Icons.camera_alt, color: Colors.white),
+        label: const Text('ESCANEAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildTabButton(String texto, int index) {
+    final activo = _tabIndex == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _tabIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: activo? Colors.red[900] : Colors.transparent,
+            border: Border(bottom: BorderSide(color: activo? Colors.red : Colors.transparent, width: 3)),
+          ),
+          child: Text(
+            texto,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: activo? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_tabIndex) {
+      case 1:
+        return _buildListaRecibidos();
+      case 2:
+        return _buildListaPendientes();
+      default:
+        return _buildListaPedidos();
+    }
+  }
+
+  Widget _buildListaPedidos() {
+    return _pedidos.isEmpty
+ ? const Center(child: Text('Sin pedidos\nPica ESCANEAR pa empezar',
+        style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: _pedidos.length,
+          itemBuilder: (context, i) {
+            final p = _pedidos[i];
+            return Dismissible(
+              key: Key(p.carpeta + p.fechaPedido),
+              direction: DismissDirection.endToStart,
+              background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
+              onDismissed: (dir) {
+                setState(() => _pedidos.removeAt(i));
+                _guardarDatos();
+                _snack('Pedido eliminado');
+              },
+              child: Card(
+                color: Colors.grey[900],
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: ListTile(
+                  title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                ),
+              ),
+            );
+          },
+        );
+  }
+
+  Widget _buildListaRecibidos() {
+    return _recibidos.isEmpty
+ ? const Center(child: Text('Sin recibidos\nEscanea una carpeta pedida',
+        style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: _recibidos.length,
+          itemBuilder: (context, i) {
+            final r = _recibidos[i];
+            return Card(
+              color: Colors.grey[900],
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: ListTile(
+                leading: const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                title: Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ),
+            );
+          },
+        );
+  }
+
+  Widget _buildListaPendientes() {
+    final pendientes = _getPendientes();
+    return pendientes.isEmpty
+ ? const Center(child: Text('No hay pendientes 👍\nTodo recibido',
+        style: TextStyle(color: Colors.green, fontSize: 16), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: pendientes.length,
+          itemBuilder: (context, i) {
+            final p = pendientes[i];
+            return Card(
+              color: Colors.grey[900],
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: ListTile(
+                leading: const Icon(Icons.pending, color: Colors.orange, size: 32),
+                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ),
+            );
+          },
+        );
+  }
+}
+
+// ========== PANTALLA NUEVA: TEXTO COMPLETO ==========
+class PantallaTextoCompleto extends StatefulWidget {
+  final String textoInicial;
+  final List<PedidoCarpeta> pedidos;
+  final List<RecibidoCarpeta> recibidos;
+  final Function(PedidoCarpeta) onAgregarPedido;
+  final Function(RecibidoCarpeta) onAgregarRecibido;
+
+  const PantallaTextoCompleto({
+    required this.textoInicial,
+    required this.pedidos,
+    required this.recibidos,
+    required this.onAgregarPedido,
+    required this.onAgregarRecibido,
+    super.key,
+  });
+
+  @override
+  State<PantallaTextoCompleto> createState() => _PantallaTextoCompletoState();
+}
+
+class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
+  late TextEditingController _textoController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textoController = TextEditingController(text: widget.textoInicial);
+  }
+
+  String _fechaHoy() {
+    final ahora = DateTime.now();
+    return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _mostrarAlerta(String msg) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.red[900],
+        title: const Text('AVISO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 18)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+  }
+
+  void _procesarComoPedido() {
     final seleccion = _textoController.selection;
     if (!seleccion.isValid || seleccion.isCollapsed) {
-      _snack('Selecciona el número de carpeta primero');
+      _snack('Selecciona el número de carpeta en el texto');
       return;
     }
-    final carpetaSeleccionada = seleccion.textInside(_textoController.text).trim();
-    if (carpetaSeleccionada.isEmpty) {
-      _snack('Selecciona el número de carpeta primero');
+    final carpeta = seleccion.textInside(_textoController.text).trim();
+    if (carpeta.isEmpty) {
+      _snack('Selecciona el número de carpeta');
       return;
     }
-
-    if (_tabIndex == 0) {
-      _mostrarDialogoPedido(carpetaSeleccionada);
-    } else if (_tabIndex == 1) {
-      _procesarRecibido(carpetaSeleccionada);
-    }
+    _mostrarDialogoPedido(carpeta);
   }
 
-  // ========== FLUJO PEDIDOS ==========
+  void _procesarComoRecibido() {
+    final seleccion = _textoController.selection;
+    if (!seleccion.isValid || seleccion.isCollapsed) {
+      _snack('Selecciona el número de carpeta en el texto');
+      return;
+    }
+    final carpeta = seleccion.textInside(_textoController.text).trim();
+    if (carpeta.isEmpty) {
+      _snack('Selecciona el número de carpeta');
+      return;
+    }
+
+    final pedido = widget.pedidos.firstWhere(
+      (p) => p.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase(),
+      orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
+    );
+
+    if (pedido.carpeta.isEmpty) {
+      _mostrarAlerta('esta no la pediste regrésala');
+      return;
+    }
+
+    final yaRecibida = widget.recibidos.any((r) => r.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase());
+    if (yaRecibida) {
+      _snack('Esta carpeta ya fue recibida');
+      return;
+    }
+
+    widget.onAgregarRecibido(RecibidoCarpeta(
+      carpeta: pedido.carpeta,
+      folio: pedido.folio,
+      volante: pedido.volante,
+      fechaRecibido: _fechaHoy(),
+    ));
+    Navigator.pop(context);
+    _snack('Recibida: ${pedido.carpeta}');
+  }
+
   void _mostrarDialogoPedido(String carpeta) {
     final ctrlFolio = TextEditingController();
     final ctrlVolante = TextEditingController();
@@ -254,16 +513,14 @@ class _HomePageState extends State<HomePage> {
                   _snack('Llena folio y volante');
                   return;
                 }
-                setState(() {
-                  _pedidos.add(PedidoCarpeta(
-                    carpeta: carpeta,
-                    folio: ctrlFolio.text.trim(),
-                    volante: ctrlVolante.text.trim(),
-                    destino: destinoSeleccionado,
-                    fechaPedido: _fechaHoy(),
-                  ));
-                });
-                _guardarDatos();
+                widget.onAgregarPedido(PedidoCarpeta(
+                  carpeta: carpeta,
+                  folio: ctrlFolio.text.trim(),
+                  volante: ctrlVolante.text.trim(),
+                  destino: destinoSeleccionado,
+                  fechaPedido: _fechaHoy(),
+                ));
+                Navigator.pop(context);
                 Navigator.pop(context);
                 _snack('Pedido guardado');
               },
@@ -275,55 +532,90 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ========== FLUJO RECIBIDOS ==========
-  void _procesarRecibido(String carpeta) {
-    final pedido = _pedidos.firstWhere(
-      (p) => p.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase(),
-      orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
-    );
 
-    if (pedido.carpeta.isEmpty) {
-      _mostrarAlerta('esta no la pediste regrésala');
-      return;
-    }
 
-    final yaRecibida = _recibidos.any((r) => r.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase());
-    if (yaRecibida) {
-      _snack('Esta carpeta ya fue recibida');
-      return;
-    }
 
-    setState(() {
-      _recibidos.add(RecibidoCarpeta(
-        carpeta: pedido.carpeta,
-        folio: pedido.folio,
-        volante: pedido.volante,
-        fechaRecibido: _fechaHoy(),
-      ));
-    });
-    _guardarDatos();
-    _snack('Recibida: ${pedido.carpeta}');
-  }
-
-  List<PedidoCarpeta> _getPendientes() {
-    return _pedidos.where((p) =>
-    !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
-    ).toList();
-  }
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  void _mostrarAlerta(String msg) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+    @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('AVISO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 18)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK', style: TextStyle(color: Colors.white))),
+        title: const Text('Selecciona Carpeta', style: TextStyle(fontWeight: FontWeight.bold)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(
+        children: [
+          // ========== INSTRUCCIONES ==========
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            color: Colors.yellow[900],
+            child: const Text(
+              '1. Corrige el texto si tiene errores\n2. Selecciona el NÚMERO DE CARPETA\n3. Pica PEDIDO o RECIBIDO',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          // ========== TEXTO COMPLETO EDITABLE ==========
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                border: Border.all(color: Colors.red[900]!, width: 2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TextField(
+                controller: _textoController,
+                style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Texto escaneado...',
+                  hintStyle: TextStyle(color: Colors.white38),
+                ),
+              ),
+            ),
+          ),
+          // ========== BOTONES ACCIÓN ==========
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Colors.grey[900],
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _procesarComoPedido,
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    label: const Text('PEDIDO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[800],
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _procesarComoRecibido,
+                    icon: const Icon(Icons.check_circle, color: Colors.white),
+                    label: const Text('RECIBIDO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[800],
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -334,217 +626,9 @@ class _HomePageState extends State<HomePage> {
     _textoController.dispose();
     super.dispose();
   }
-
-
-
-   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.red[900],
-        title: const Text(
-          'Control Carpetas MP',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
-            onPressed: _abrirCamara,
-            tooltip: 'Escanear',
-          ),
-        ],
-      ),
-      body: Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // ========== TABS ==========
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  _buildTabButton('PEDIDOS', 0),
-                  _buildTabButton('RECIBIDOS', 1),
-                  _buildTabButton('PENDIENTES', 2),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            // ========== AYUDA SEGÚN TAB ==========
-            if (_tabIndex == 0)
-              const Text('1. Escanea → 2. Selecciona carpeta → 3. Pica +',
-                style: TextStyle(color: Colors.yellow, fontSize: 12)),
-            if (_tabIndex == 1)
-              const Text('1. Escanea carpeta pedida → 2. Selecciona → 3. Pica +',
-                style: TextStyle(color: Colors.yellow, fontSize: 12)),
-            if (_tabIndex == 2)
-              Text('Pendientes: ${_getPendientes().length}',
-                style: const TextStyle(color: Colors.orange, fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            // ========== TEXTO ESCANEADO ==========
-            Container(
-              width: double.infinity,
-              height: 120,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                border: Border.all(color: Colors.red[900]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: _textoEscaneado.isEmpty
-           ? const Center(
-                  child: Text(
-                    'Pica la cámara pa escanear carpeta...',
-                    style: TextStyle(color: Colors.white38, fontSize: 14),
-                  ),
-                )
-                : TextField(
-                  controller: _textoController,
-                  readOnly: false,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Texto escaneado...',
-                    hintStyle: TextStyle(color: Colors.white38),
-                  ),
-                  onChanged: (v) => _textoEscaneado = v,
-                ),
-            ),
-            const SizedBox(height: 12),
-            // ========== CONTENIDO TAB ==========
-            Expanded(child: _buildTabContent()),
-          ],
-        ),
-      ),
-      // ========== BOTÓN + SOLO PA PEDIDOS Y RECIBIDOS ==========
-      floatingActionButton: _tabIndex == 0 || _tabIndex == 1
-    ? FloatingActionButton(
-          backgroundColor: Colors.red[900],
-          onPressed: _procesarBotonMas,
-          child: const Icon(Icons.add, color: Colors.white, size: 32),
-        )
-      : null,
-    );
-  }
-
-  Widget _buildTabButton(String texto, int index) {
-    final activo = _tabIndex == index;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _tabIndex = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: activo? Colors.red[900] : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            texto,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: activo? FontWeight.bold : FontWeight.normal,
-              fontSize: 13,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabContent() {
-    switch (_tabIndex) {
-      case 1:
-        return _buildListaRecibidos();
-      case 2:
-        return _buildListaPendientes();
-      default:
-        return _buildListaPedidos();
-    }
-  }
-
-  Widget _buildListaPedidos() {
-    return _pedidos.isEmpty
-  ? const Center(child: Text('Sin pedidos\nEscanea y selecciona carpeta + botón +',
-        style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
-      : ListView.builder(
-          itemCount: _pedidos.length,
-          itemBuilder: (context, i) {
-            final p = _pedidos[i];
-            return Card(
-              color: Colors.grey[900],
-              child: ListTile(
-                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    setState(() => _pedidos.removeAt(i));
-                    _guardarDatos();
-                  },
-                ),
-              ),
-            );
-          },
-        );
-  }
-
-  Widget _buildListaRecibidos() {
-    return _recibidos.isEmpty
-  ? const Center(child: Text('Sin recibidos\nEscanea carpeta pedida + botón +',
-        style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
-      : ListView.builder(
-          itemCount: _recibidos.length,
-          itemBuilder: (context, i) {
-            final r = _recibidos[i];
-            return Card(
-              color: Colors.grey[900],
-              child: ListTile(
-                leading: const Icon(Icons.check_circle, color: Colors.green, size: 32),
-                title: Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
-              ),
-            );
-          },
-        );
-  }
-
-  Widget _buildListaPendientes() {
-    final pendientes = _getPendientes();
-    return pendientes.isEmpty
-  ? const Center(child: Text('No hay pendientes 👍\nTodo recibido',
-        style: TextStyle(color: Colors.green, fontSize: 16), textAlign: TextAlign.center))
-      : ListView.builder(
-          itemCount: pendientes.length,
-          itemBuilder: (context, i) {
-            final p = pendientes[i];
-            return Card(
-              color: Colors.grey[900],
-              child: ListTile(
-                leading: const Icon(Icons.pending, color: Colors.orange, size: 32),
-                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
-              ),
-            );
-          },
-        );
-  }
 }
 
-
-
-
-// ========== PANTALLA DE CÁMARA + OCR ==========
+// ========== PANTALLA CÁMARA ==========
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -599,7 +683,7 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('Escanear Carpeta'),
+        title: const Text('Escanear Documento'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -624,12 +708,13 @@ class _CameraScreenState extends State<CameraScreen> {
             left: 0,
             right: 0,
             child: Center(
-              child: FloatingActionButton(
+              child: FloatingActionButton.extended(
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
-                child: _procesando
-          ? const CircularProgressIndicator(color: Colors.white)
-                    : const Icon(Icons.camera, size: 32, color: Colors.white),
+                icon: _procesando
+           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.camera, size: 28, color: Colors.white),
+                label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           ),
@@ -644,3 +729,6 @@ class _CameraScreenState extends State<CameraScreen> {
 
 
 
+
+
+  
