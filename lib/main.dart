@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'dart:convert';
 
-// ========== NUEVO: MODELOS PA CONTROL DE CARPETAS ==========
+// ========== MODELOS SIMPLIFICADOS ==========
 class PedidoCarpeta {
   final String carpeta;
   final String folio;
   final String volante;
   final String destino; // "Noti" o "Mesa de Control"
-  final String fechaPedido;
+  final String fechaPedido; // DD/MM/YYYY
 
   PedidoCarpeta({
     required this.carpeta,
@@ -43,7 +42,7 @@ class RecibidoCarpeta {
   final String carpeta;
   final String folio;
   final String volante;
-  final String fechaRecibido;
+  final String fechaRecibido; // DD/MM/YYYY
 
   RecibidoCarpeta({
     required this.carpeta,
@@ -67,20 +66,6 @@ class RecibidoCarpeta {
   );
 }
 
-// ORDEN EXACTO PA EL TXT/EXCEL
-const List<String> CAMPOS_ORDEN = [
-  'VOLANTE', 'NOMBRE', 'CALIDAD', 'CARPETA', 'OFICIO', 'FECHA', 'RECEPCION',
-  'PETICION', 'FOJAS', 'OTROS', 'FUNDAMENTOS', 'ORDEN_RESPUESTAS', 'ESTATUS',
-  'EN_ESTUDIO', 'ACCESO', 'COPIAS_VICT', 'COPIAS_IMP', 'AUT_MEDIOS',
-  'AUT_ABOGADOS', 'S_R', 'COPIAS_AUTENTICAS'
-];
-
-// CAMPOS QUE SON TRUE/FALSE
-const Set<String> CAMPOS_BOOL = {
-  'ESTATUS', 'EN_ESTUDIO', 'ACCESO', 'COPIAS_VICT', 'COPIAS_IMP',
-  'AUT_MEDIOS', 'AUT_ABOGADOS', 'S_R', 'COPIAS_AUTENTICAS'
-};
-
 List<CameraDescription> cameras = [];
 
 void main() async {
@@ -94,13 +79,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Adry CSV - Control Carpetas',
+      title: 'Control Carpetas MP',
       theme: ThemeData.dark(),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
+
+
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -112,32 +100,20 @@ class _HomePageState extends State<HomePage> {
   String _textoEscaneado = '';
   final TextEditingController _textoController = TextEditingController();
 
-  // AQUÍ GUARDAMOS TODOS LOS CAMPOS DEL CSV ORIGINAL
-  Map<String, String> _valoresCampos = {};
-
-  // ========== NUEVO: LISTAS PA CONTROL DE CARPETAS ==========
   List<PedidoCarpeta> _pedidos = [];
   List<RecibidoCarpeta> _recibidos = [];
 
-  // PA SABER QUÉ TAB ESTÁ ACTIVO: 0=CSV, 1=Pedidos, 2=Recibidos, 3=Pendientes
+  // 0=Pedidos, 1=Recibidos, 2=Pendientes
   int _tabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Inicializar todos los campos vacíos del CSV
-    for (var campo in CAMPOS_ORDEN) {
-      _valoresCampos[campo] = '';
-    }
-    // Los booleanos inician en false
-    for (var campo in CAMPOS_BOOL) {
-      _valoresCampos[campo] = 'false';
-    }
-    _cargarDatosCarpetas(); // NUEVO: Cargar pedidos/recibidos guardados
+    _cargarDatos();
   }
 
-  // ========== NUEVO: PERSISTENCIA LOCAL ==========
-  Future<void> _cargarDatosCarpetas() async {
+  // ========== PERSISTENCIA ==========
+  Future<void> _cargarDatos() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final filePedidos = File('${dir.path}/pedidos.json');
@@ -159,11 +135,11 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      print('Error cargando datos: $e');
+      print('Error cargando: $e');
     }
   }
 
-  Future<void> _guardarDatosCarpetas() async {
+  Future<void> _guardarDatos() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final filePedidos = File('${dir.path}/pedidos.json');
@@ -176,64 +152,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // HELPERS PA FECHA CON LETRA
-  String _numeroALetras(int numero) {
-    const unidades = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
-    const diezVeinte = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
-    const decenas = ['', '', 'veinte', 'treinta'];
-
-    if (numero < 10) return unidades[numero];
-    if (numero < 20) return diezVeinte[numero - 10];
-    if (numero == 20) return 'veinte';
-    if (numero < 30) return 'veinti${unidades[numero - 20]}';
-    if (numero == 30) return 'treinta';
-    if (numero == 31) return 'treinta y uno';
-    return numero.toString();
-  }
-
-  String _mesALetras(int mes) {
-    const meses = [
-      '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-    ];
-    return meses[mes];
-  }
-
-  Future<void> _abrirDatePicker(String campo, StateSetter setModalState) async {
+  // ========== HELPER FECHA ==========
+  String _fechaHoy() {
     final ahora = DateTime.now();
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: ahora,
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.red,
-              surface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (fecha!= null) {
-      final diaNum = fecha.day.toString().padLeft(2, '0');
-      final diaLetra = _numeroALetras(fecha.day);
-      final mesLetra = _mesALetras(fecha.month);
-      final fechaFormateada = '$diaNum $diaLetra de $mesLetra';
-
-      setModalState(() {
-        _valoresCampos[campo] = fechaFormateada;
-      });
-      setState(() {});
-      Navigator.pop(context);
-      _snack('Campo $campo = $fechaFormateada');
-    }
+    return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
   }
 
+  // ========== OCR ==========
   void _abrirCamara() async {
     if (cameras.isEmpty) {
       _snack('No hay cámaras disponibles');
@@ -241,43 +166,38 @@ class _HomePageState extends State<HomePage> {
     }
     final resultado = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
-        builder: (context) => const CameraScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const CameraScreen()),
     );
     if (resultado!= null && resultado.isNotEmpty) {
       setState(() {
         _textoEscaneado = resultado;
         _textoController.text = resultado;
       });
-      _snack('Texto extraído');
+      _snack('Texto extraído. Selecciona la carpeta');
     }
   }
 
-  void _abrirMenuCampos() {
+  void _procesarBotonMas() {
     final seleccion = _textoController.selection;
-    String textoSeleccionado = '';
-    if (seleccion.isValid &&!seleccion.isCollapsed) {
-      textoSeleccionado = seleccion.textInside(_textoController.text);
+    if (!seleccion.isValid || seleccion.isCollapsed) {
+      _snack('Selecciona el número de carpeta primero');
+      return;
     }
-
-    // NUEVO: Si estamos en tab de Pedidos o Recibidos, abre flujo especial
-    if (_tabIndex == 1) {
-      _mostrarDialogoPedido(textoSeleccionado);
-    } else if (_tabIndex == 2) {
-      _procesarRecibido(textoSeleccionado);
-    } else {
-      _mostrarBottomSheetCampos(textoSeleccionado);
-    }
-  }
-
-  // ========== NUEVO: FLUJO PEDIDOS ==========
-  void _mostrarDialogoPedido(String carpetaPreseleccionada) {
-    if (carpetaPreseleccionada.isEmpty) {
+    final carpetaSeleccionada = seleccion.textInside(_textoController.text).trim();
+    if (carpetaSeleccionada.isEmpty) {
       _snack('Selecciona el número de carpeta primero');
       return;
     }
 
+    if (_tabIndex == 0) {
+      _mostrarDialogoPedido(carpetaSeleccionada);
+    } else if (_tabIndex == 1) {
+      _procesarRecibido(carpetaSeleccionada);
+    }
+  }
+
+  // ========== FLUJO PEDIDOS ==========
+  void _mostrarDialogoPedido(String carpeta) {
     final ctrlFolio = TextEditingController();
     final ctrlVolante = TextEditingController();
     String destinoSeleccionado = 'Noti';
@@ -293,7 +213,8 @@ class _HomePageState extends State<HomePage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('CARPETA: $carpetaPreseleccionada', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                Text('CARPETA: $carpeta', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                Text('FECHA: ${_fechaHoy()}', style: const TextStyle(color: Colors.white70)),
                 const SizedBox(height: 12),
                 TextField(
                   controller: ctrlFolio,
@@ -335,16 +256,16 @@ class _HomePageState extends State<HomePage> {
                 }
                 setState(() {
                   _pedidos.add(PedidoCarpeta(
-                    carpeta: carpetaPreseleccionada,
+                    carpeta: carpeta,
                     folio: ctrlFolio.text.trim(),
                     volante: ctrlVolante.text.trim(),
                     destino: destinoSeleccionado,
-                    fechaPedido: DateTime.now().toString().substring(0, 16),
+                    fechaPedido: _fechaHoy(),
                   ));
                 });
-                _guardarDatosCarpetas();
+                _guardarDatos();
                 Navigator.pop(context);
-                _snack('Pedido guardado: $carpetaPreseleccionada');
+                _snack('Pedido guardado');
               },
               child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
             ),
@@ -354,170 +275,58 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
-
-    // ========== NUEVO: FLUJO RECIBIDOS ==========
-  void _procesarRecibido(String carpetaSeleccionada) {
-    if (carpetaSeleccionada.isEmpty) {
-      _snack('Selecciona el número de carpeta primero');
-      return;
-    }
-
+  // ========== FLUJO RECIBIDOS ==========
+  void _procesarRecibido(String carpeta) {
     final pedido = _pedidos.firstWhere(
-      (p) => p.carpeta.trim().toLowerCase() == carpetaSeleccionada.trim().toLowerCase(),
+      (p) => p.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase(),
       orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
     );
 
     if (pedido.carpeta.isEmpty) {
-      _snack('No esta no la pediste');
+      _mostrarAlerta('esta no la pediste regrésala');
       return;
     }
 
-    // Si ya está recibida, avisar
-    final yaRecibida = _recibidos.any((r) => r.carpeta.trim().toLowerCase() == carpetaSeleccionada.trim().toLowerCase());
+    final yaRecibida = _recibidos.any((r) => r.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase());
     if (yaRecibida) {
       _snack('Esta carpeta ya fue recibida');
       return;
     }
 
-    // Prellenar y guardar en recibidos
     setState(() {
       _recibidos.add(RecibidoCarpeta(
         carpeta: pedido.carpeta,
         folio: pedido.folio,
         volante: pedido.volante,
-        fechaRecibido: DateTime.now().toString().substring(0, 16),
+        fechaRecibido: _fechaHoy(),
       ));
     });
-    _guardarDatosCarpetas();
-    _snack('Recibida: ${pedido.carpeta} | Folio: ${pedido.folio}');
+    _guardarDatos();
+    _snack('Recibida: ${pedido.carpeta}');
   }
 
-  // ========== NUEVO: LISTA DE PENDIENTES ==========
   List<PedidoCarpeta> _getPendientes() {
     return _pedidos.where((p) =>
-     !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
+    !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
     ).toList();
-  }
-
-  void _mostrarBottomSheetCampos(String textoSeleccionado) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: const EdgeInsets.all(16),
-          height: MediaQuery.of(context).size.height * 0.7,
-          child: Column(
-            children: [
-              Text(
-                textoSeleccionado.isEmpty
-              ? 'SELECCIONA UN CAMPO'
-                  : 'Texto: "${textoSeleccionado.length > 30? '${textoSeleccionado.substring(0, 30)}...' : textoSeleccionado}"',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: CAMPOS_ORDEN.length,
-                  itemBuilder: (context, i) {
-                    final campo = CAMPOS_ORDEN[i];
-                    final valor = _valoresCampos[campo]?? '';
-                    final tieneValor = valor.isNotEmpty && valor!= 'false';
-                    final esBool = CAMPOS_BOOL.contains(campo);
-                    final esFecha = campo == 'FECHA' || campo == 'RECEPCION';
-
-                    return ListTile(
-                      dense: true,
-                      title: Text(
-                        campo.replaceAll('_', ' '),
-                        style: TextStyle(
-                          color: tieneValor? Colors.green : Colors.white,
-                          fontWeight: tieneValor? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                      subtitle: esBool
-                    ? Text(valor == 'true'? 'TRUE' : 'FALSE',
-                            style: TextStyle(color: valor == 'true'? Colors.green : Colors.white54))
-                        : Text(valor.isEmpty? 'Vacío' : valor,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (tieneValor &&!esBool)
-                            IconButton(
-                              icon: const Icon(Icons.clear, color: Colors.red, size: 20),
-                              onPressed: () {
-                                setModalState(() {
-                                  _valoresCampos[campo] = '';
-                                });
-                                setState(() {});
-                                _snack('Campo $campo borrado');
-                              },
-                            ),
-                          if (esBool)
-                            Switch(
-                              value: valor == 'true',
-                              activeColor: Colors.green,
-                              onChanged: (v) {
-                                setModalState(() {
-                                  _valoresCampos[campo] = v.toString();
-                                });
-                                setState(() {});
-                              },
-                            ),
-                          if (esFecha)
-                            const Icon(Icons.calendar_month, color: Colors.red, size: 20),
-                        ],
-                      ),
-                      onTap: esBool? null : () {
-                        if (esFecha) {
-                          _abrirDatePicker(campo, setModalState);
-                          return;
-                        }
-                        if (textoSeleccionado.isEmpty) {
-                          _snack('Selecciona texto primero');
-                          return;
-                        }
-                        setModalState(() {
-                          _valoresCampos[campo] = textoSeleccionado;
-                        });
-                        setState(() {});
-                        Navigator.pop(context);
-                        _snack('Campo $campo = $textoSeleccionado');
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _verCampos() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PaginaCampos(
-          valoresCampos: Map.from(_valoresCampos),
-          onGuardar: (nuevosValores) {
-            setState(() {
-              _valoresCampos = nuevosValores;
-            });
-          },
-        ),
-      ),
-    );
   }
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _mostrarAlerta(String msg) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.red[900],
+        title: const Text('AVISO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 18)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
   }
 
   @override
@@ -526,49 +335,77 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // ========== NUEVO: WIDGET PA CADA TAB ==========
-  Widget _buildTabContent() {
-    switch (_tabIndex) {
-      case 1: // PEDIDOS
-        return _buildListaPedidos();
-      case 2: // RECIBIDOS
-        return _buildListaRecibidos();
-      case 3: // PENDIENTES
-        return _buildListaPendientes();
-      default: // CSV ORIGINAL
-        return _buildTabCSV();
-    }
-  }
 
-  Widget _buildTabCSV() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'TEXTO ESCANEADO - Selecciona y pica +',
-          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14),
+
+   @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.red[900],
+        title: const Text(
+          'Control Carpetas MP',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              border: Border.all(color: Colors.red[900]!),
-              borderRadius: BorderRadius.circular(8),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
+            onPressed: _abrirCamara,
+            tooltip: 'Escanear',
+          ),
+        ],
+      ),
+      body: Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // ========== TABS ==========
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  _buildTabButton('PEDIDOS', 0),
+                  _buildTabButton('RECIBIDOS', 1),
+                  _buildTabButton('PENDIENTES', 2),
+                ],
+              ),
             ),
-            child: _textoEscaneado.isEmpty
-             ? const Center(
+            const SizedBox(height: 12),
+            // ========== AYUDA SEGÚN TAB ==========
+            if (_tabIndex == 0)
+              const Text('1. Escanea → 2. Selecciona carpeta → 3. Pica +',
+                style: TextStyle(color: Colors.yellow, fontSize: 12)),
+            if (_tabIndex == 1)
+              const Text('1. Escanea carpeta pedida → 2. Selecciona → 3. Pica +',
+                style: TextStyle(color: Colors.yellow, fontSize: 12)),
+            if (_tabIndex == 2)
+              Text('Pendientes: ${_getPendientes().length}',
+                style: const TextStyle(color: Colors.orange, fontSize: 14, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            // ========== TEXTO ESCANEADO ==========
+            Container(
+              width: double.infinity,
+              height: 120,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                border: Border.all(color: Colors.red[900]!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _textoEscaneado.isEmpty
+           ? const Center(
                   child: Text(
-                    'Pica el icono de la cámara pa escanear...',
-                    style: TextStyle(color: Colors.white38, fontSize: 16),
+                    'Pica la cámara pa escanear carpeta...',
+                    style: TextStyle(color: Colors.white38, fontSize: 14),
                   ),
                 )
                 : TextField(
                   controller: _textoController,
                   readOnly: false,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
                   maxLines: null,
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,
@@ -577,163 +414,23 @@ class _HomePageState extends State<HomePage> {
                     hintText: 'Texto escaneado...',
                     hintStyle: TextStyle(color: Colors.white38),
                   ),
-                  onChanged: (v) {
-                    _textoEscaneado = v;
-                  },
+                  onChanged: (v) => _textoEscaneado = v,
                 ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Campos llenos: ${_valoresCampos.values.where((v) => v.isNotEmpty && v!= 'false').length}/${CAMPOS_ORDEN.length}',
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildListaPedidos() {
-    return _pedidos.isEmpty
-     ? const Center(child: Text('Sin pedidos aún\nEscanea y selecciona carpeta + botón PEDIDOS',
-          style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
-      : ListView.builder(
-          itemCount: _pedidos.length,
-          itemBuilder: (context, i) {
-            final p = _pedidos[i];
-            return Card(
-              color: Colors.grey[900],
-              child: ListTile(
-                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\n${p.fechaPedido}',
-                  style: const TextStyle(color: Colors.white70)),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    setState(() => _pedidos.removeAt(i));
-                    _guardarDatosCarpetas();
-                  },
-                ),
-              ),
-            );
-          },
-        );
-  }
-
-  Widget _buildListaRecibidos() {
-    return _recibidos.isEmpty
-     ? const Center(child: Text('Sin recibidos aún\nEscanea carpeta pedida + botón RECIBIDOS',
-          style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
-      : ListView.builder(
-          itemCount: _recibidos.length,
-          itemBuilder: (context, i) {
-            final r = _recibidos[i];
-            return Card(
-              color: Colors.grey[900],
-              child: ListTile(
-                leading: const Icon(Icons.check_circle, color: Colors.green),
-                title: Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
-                  style: const TextStyle(color: Colors.white70)),
-              ),
-            );
-          },
-        );
-  }
-
-  Widget _buildListaPendientes() {
-    final pendientes = _getPendientes();
-    return pendientes.isEmpty
-     ? const Center(child: Text('No hay pendientes\nTodo recibido 👍',
-          style: TextStyle(color: Colors.green), textAlign: TextAlign.center))
-      : ListView.builder(
-          itemCount: pendientes.length,
-          itemBuilder: (context, i) {
-            final p = pendientes[i];
-            return Card(
-              color: Colors.grey[900],
-              child: ListTile(
-                leading: const Icon(Icons.pending, color: Colors.orange),
-                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
-                  style: const TextStyle(color: Colors.white70)),
-              ),
-            );
-          },
-        );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.red[900],
-        title: const Text(
-          'Adry CSV',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          // SOLO EN TAB CSV MOSTRAMOS SHOW Y +
-          if (_tabIndex == 0)...[
-            TextButton(
-              onPressed: _verCampos,
-              child: const Text('SHOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add, color: Colors.white, size: 28),
-              onPressed: _abrirMenuCampos,
-              tooltip: 'Asignar a campo',
-            ),
-          ],
-          IconButton(
-            icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
-            onPressed: _abrirCamara,
-          ),
-        ],
-      ),
-      body: Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // ========== NUEVO: MENU DE TABS ==========
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  _buildTabButton('CSV', 0),
-                  _buildTabButton('PEDIDOS', 1),
-                  _buildTabButton('RECIBIDOS', 2),
-                  _buildTabButton('PENDIENTES', 3),
-                ],
-              ),
             ),
             const SizedBox(height: 12),
-            // TEXTO DE AYUDA SEGÚN TAB
-            if (_tabIndex == 1)
-              const Text('Selecciona número de carpeta en el texto y pica +',
-                style: TextStyle(color: Colors.yellow, fontSize: 12)),
-            if (_tabIndex == 2)
-              const Text('Selecciona número de carpeta pedida y pica +',
-                style: TextStyle(color: Colors.yellow, fontSize: 12)),
-            if (_tabIndex == 3)
-              Text('Pendientes: ${_getPendientes().length}',
-                style: const TextStyle(color: Colors.orange, fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+            // ========== CONTENIDO TAB ==========
             Expanded(child: _buildTabContent()),
           ],
         ),
       ),
-      // ========== NUEVO: BOTÓN + FLOTANTE PA PEDIDOS/RECIBIDOS ==========
-      floatingActionButton: _tabIndex == 1 || _tabIndex == 2
-       ? FloatingActionButton(
-            backgroundColor: Colors.red[900],
-            onPressed: _abrirMenuCampos,
-            child: const Icon(Icons.add, color: Colors.white),
-          )
-        : null,
+      // ========== BOTÓN + SOLO PA PEDIDOS Y RECIBIDOS ==========
+      floatingActionButton: _tabIndex == 0 || _tabIndex == 1
+    ? FloatingActionButton(
+          backgroundColor: Colors.red[900],
+          onPressed: _procesarBotonMas,
+          child: const Icon(Icons.add, color: Colors.white, size: 32),
+        )
+      : null,
     );
   }
 
@@ -754,229 +451,100 @@ class _HomePageState extends State<HomePage> {
             style: TextStyle(
               color: Colors.white,
               fontWeight: activo? FontWeight.bold : FontWeight.normal,
-              fontSize: 12,
+              fontSize: 13,
             ),
           ),
         ),
       ),
     );
   }
-}
 
-
-// PÁGINA SHOW - VER TODOS LOS CAMPOS + GUARDAR (SIN CAMBIOS)
-class PaginaCampos extends StatefulWidget {
-  final Map<String, String> valoresCampos;
-  final Function(Map<String, String>) onGuardar;
-
-  const PaginaCampos({
-    required this.valoresCampos,
-    required this.onGuardar,
-    super.key,
-  });
-
-  @override
-  State<PaginaCampos> createState() => _PaginaCamposState();
-}
-
-class _PaginaCamposState extends State<PaginaCampos> {
-  late Map<String, String> _valoresTemp;
-
-  @override
-  void initState() {
-    super.initState();
-    _valoresTemp = Map.from(widget.valoresCampos);
+  Widget _buildTabContent() {
+    switch (_tabIndex) {
+      case 1:
+        return _buildListaRecibidos();
+      case 2:
+        return _buildListaPendientes();
+      default:
+        return _buildListaPedidos();
+    }
   }
 
-  Future<void> _guardarTxt() async {
-  try {
-    final ctrlNombre = TextEditingController();
-
-    final nombreArchivo = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('NOMBRE DEL ARCHIVO',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: ctrlNombre,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'Ej: Escritura_Daniel_Hernandez',
-            hintStyle: TextStyle(color: Colors.white38),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.red)),
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.green)),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCELAR', style: TextStyle(color: Colors.red)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, ctrlNombre.text.trim()),
-            child: const Text('GUARDAR', style: TextStyle(color: Colors.green)),
-          ),
-        ],
-      ),
-    );
-
-    if (nombreArchivo == null || nombreArchivo.isEmpty) {
-      _snack('Debes poner un nombre');
-      return;
-    }
-
-    if (Platform.isAndroid) {
-      if (await Permission.manageExternalStorage.request().isDenied) {
-        _snack('Ocupas dar permiso en Ajustes');
-        await openAppSettings();
-        return;
-      }
-    }
-
-    final valoresOrdenados = CAMPOS_ORDEN.map((campo) {
-      final valor = _valoresTemp[campo]?? '';
-      return '"${valor.replaceAll('"', '""')}"';
-    }).toList();
-
-    final lineaExcel = valoresOrdenados.join(',');
-
-    Directory? dir;
-    if (Platform.isAndroid) {
-      dir = Directory('/storage/emulated/0/Download');
-    } else {
-      dir = await getApplicationDocumentsDirectory();
-    }
-
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-
-    final nombreLimpio = nombreArchivo.replaceAll(RegExp(r'[^\w\s-]'), '');
-    final file = File('${dir.path}/$nombreLimpio.csv');
-
-    await file.writeAsString(lineaExcel, flush: true);
-    _snack('Guardado: $nombreLimpio.csv');
-
-  } catch (e) {
-    _snack('Error al guardar: $e');
-  }
-}
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.red[900],
-        title: const Text('CAMPOS ADRY CSV'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            widget.onGuardar(_valoresTemp);
-            Navigator.pop(context);
-          },
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: _guardarTxt,
-            icon: const Icon(Icons.save, color: Colors.white),
-            label: const Text('GUARDAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-      body: Container(
-        padding: const EdgeInsets.all(12),
-        child: ListView.builder(
-          itemCount: CAMPOS_ORDEN.length,
+  Widget _buildListaPedidos() {
+    return _pedidos.isEmpty
+  ? const Center(child: Text('Sin pedidos\nEscanea y selecciona carpeta + botón +',
+        style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: _pedidos.length,
           itemBuilder: (context, i) {
-            final campo = CAMPOS_ORDEN[i];
-            final valor = _valoresTemp[campo]?? '';
-            final esBool = CAMPOS_BOOL.contains(campo);
-            final tieneValor = valor.isNotEmpty && valor!= 'false';
-
+            final p = _pedidos[i];
             return Card(
               color: Colors.grey[900],
               child: ListTile(
-                title: Text(
-                  campo.replaceAll('_', ' '),
-                  style: TextStyle(
-                    color: tieneValor? Colors.green : Colors.white,
-                    fontWeight: tieneValor? FontWeight.bold : FontWeight.normal,
-                  ),
+                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () {
+                    setState(() => _pedidos.removeAt(i));
+                    _guardarDatos();
+                  },
                 ),
-                subtitle: Text(
-                  valor.isEmpty? 'VACÍO' : valor,
-                  style: TextStyle(
-                    color: tieneValor? Colors.greenAccent : Colors.white38,
-                    fontSize: 13,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: esBool
-           ? Switch(
-                      value: valor == 'true',
-                      activeColor: Colors.green,
-                      onChanged: (v) {
-                        setState(() {
-                          _valoresTemp[campo] = v.toString();
-                        });
-                      },
-                    )
-                    : IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.white54, size: 20),
-                      onPressed: () async {
-                        final ctrl = TextEditingController(text: valor);
-                        final nuevo = await showDialog<String>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            backgroundColor: Colors.grey[900],
-                            title: Text(campo.replaceAll('_', ' '),
-                              style: const TextStyle(color: Colors.white)),
-                            content: TextField(
-                              controller: ctrl,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: const InputDecoration(
-                                enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.red)),
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('CANCELAR'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, ctrl.text),
-                                child: const Text('OK', style: TextStyle(color: Colors.green)),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (nuevo!= null) {
-                          setState(() {
-                            _valoresTemp[campo] = nuevo;
-                          });
-                        }
-                      },
-                    ),
               ),
             );
           },
-        ),
-      ),
-    );
+        );
+  }
+
+  Widget _buildListaRecibidos() {
+    return _recibidos.isEmpty
+  ? const Center(child: Text('Sin recibidos\nEscanea carpeta pedida + botón +',
+        style: TextStyle(color: Colors.white38), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: _recibidos.length,
+          itemBuilder: (context, i) {
+            final r = _recibidos[i];
+            return Card(
+              color: Colors.grey[900],
+              child: ListTile(
+                leading: const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                title: Text('CARPETA: ${r.carpeta}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${r.folio}\nVolante: ${r.volante}\nRecibido: ${r.fechaRecibido}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ),
+            );
+          },
+        );
+  }
+
+  Widget _buildListaPendientes() {
+    final pendientes = _getPendientes();
+    return pendientes.isEmpty
+  ? const Center(child: Text('No hay pendientes 👍\nTodo recibido',
+        style: TextStyle(color: Colors.green, fontSize: 16), textAlign: TextAlign.center))
+      : ListView.builder(
+          itemCount: pendientes.length,
+          itemBuilder: (context, i) {
+            final p = pendientes[i];
+            return Card(
+              color: Colors.grey[900],
+              child: ListTile(
+                leading: const Icon(Icons.pending, color: Colors.orange, size: 32),
+                title: Text('CARPETA: ${p.carpeta}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                subtitle: Text('Folio: ${p.folio}\nVolante: ${p.volante}\nDestino: ${p.destino}\nPedido: ${p.fechaPedido}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ),
+            );
+          },
+        );
   }
 }
 
-// PANTALLA DE CÁMARA + OCR - SOLO EXTRAE TEXTO (SIN CAMBIOS)
+
+
+
+// ========== PANTALLA DE CÁMARA + OCR ==========
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -1031,7 +599,7 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.red[900],
-        title: const Text('Escanear Texto'),
+        title: const Text('Escanear Carpeta'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -1070,7 +638,6 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-
 
 
 
