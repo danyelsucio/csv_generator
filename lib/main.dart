@@ -88,9 +88,6 @@ class MyApp extends StatelessWidget {
 }
 
 
-
-
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -152,9 +149,13 @@ class _HomePageState extends State<HomePage> {
     return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
   }
 
+  String _normalizar(String texto) {
+    return texto.trim().toLowerCase().replaceAll(' ', '');
+  }
+
   List<PedidoCarpeta> _getPendientes() {
     return _pedidos.where((p) =>
-  !_recibidos.any((r) => r.carpeta.trim().toLowerCase() == p.carpeta.trim().toLowerCase())
+!_recibidos.any((r) => _normalizar(r.carpeta) == _normalizar(p.carpeta))
     ).toList();
   }
 
@@ -204,6 +205,23 @@ class _HomePageState extends State<HomePage> {
     String destinoSeleccionado = 'Noti';
     String tipo = 'PEDIDO';
 
+    void _autocompletar() {
+      final carpetaNorm = _normalizar(ctrlCarpeta.text);
+      if (carpetaNorm.isEmpty) return;
+
+      final pedidoExistente = _pedidos.firstWhere(
+        (p) => _normalizar(p.carpeta) == carpetaNorm,
+        orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
+      );
+
+      if (pedidoExistente.carpeta.isNotEmpty) {
+        ctrlFolio.text = pedidoExistente.folio;
+        ctrlVolante.text = pedidoExistente.volante;
+        destinoSeleccionado = pedidoExistente.destino;
+        _snack('Datos autocompletados');
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -219,9 +237,23 @@ class _HomePageState extends State<HomePage> {
                   dropdownColor: Colors.grey[900],
                   style: const TextStyle(color: Colors.white),
                   items: ['PEDIDO', 'RECIBIDO'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (v) => setDialogState(() => tipo = v!),
+                  onChanged: (v) => setDialogState(() {
+                    tipo = v!;
+                    ctrlFolio.clear();
+                    ctrlVolante.clear();
+                  }),
                 ),
-                TextField(controller: ctrlCarpeta, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'CARPETA', labelStyle: TextStyle(color: Colors.white70))),
+                TextField(
+                  controller: ctrlCarpeta,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'CARPETA', labelStyle: TextStyle(color: Colors.white70)),
+                  onChanged: (val) {
+                    if (tipo == 'RECIBIDO') {
+                      _autocompletar();
+                      setDialogState(() {});
+                    }
+                  },
+                ),
                 TextField(controller: ctrlFolio, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'FOLIO', labelStyle: TextStyle(color: Colors.white70))),
                 TextField(controller: ctrlVolante, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'VOLANTE', labelStyle: TextStyle(color: Colors.white70))),
                 if (tipo == 'PEDIDO')...[
@@ -237,16 +269,22 @@ class _HomePageState extends State<HomePage> {
                 ],
               ],
             ),
-          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
             TextButton(
               onPressed: () {
+                final carpetaNorm = _normalizar(ctrlCarpeta.text);
                 if (ctrlCarpeta.text.isEmpty || ctrlFolio.text.isEmpty || ctrlVolante.text.isEmpty) {
                   _snack('Llena todos los campos');
                   return;
                 }
+
                 if (tipo == 'PEDIDO') {
+                  final existe = _pedidos.any((p) => _normalizar(p.carpeta) == carpetaNorm);
+                  if (existe) {
+                    _snack('Esta carpeta ya está en PEDIDOS');
+                    return;
+                  }
                   setState(() => _pedidos.add(PedidoCarpeta(
                     carpeta: ctrlCarpeta.text.trim(),
                     folio: ctrlFolio.text.trim(),
@@ -255,8 +293,22 @@ class _HomePageState extends State<HomePage> {
                     fechaPedido: _fechaHoy(),
                   )));
                 } else {
+                  final pedido = _pedidos.firstWhere(
+                    (p) => _normalizar(p.carpeta) == carpetaNorm,
+                    orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
+                  );
+                  if (pedido.carpeta.isEmpty) {
+                    Navigator.pop(context);
+                    _mostrarAlerta('Esta no la pediste, regrésala');
+                    return;
+                  }
+                  final yaRecibida = _recibidos.any((r) => _normalizar(r.carpeta) == carpetaNorm);
+                  if (yaRecibida) {
+                    _snack('Esta carpeta ya fue recibida');
+                    return;
+                  }
                   setState(() => _recibidos.add(RecibidoCarpeta(
-                    carpeta: ctrlCarpeta.text.trim(),
+                    carpeta: pedido.carpeta,
                     folio: ctrlFolio.text.trim(),
                     volante: ctrlVolante.text.trim(),
                     fechaRecibido: _fechaHoy(),
@@ -270,6 +322,20 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _mostrarAlerta(String msg) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.red[900],
+        title: const Text('AVISO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 18)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK', style: TextStyle(color: Colors.white))),
+        ],
       ),
     );
   }
@@ -303,7 +369,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCELAR', style: TextStyle(color: Colors.red))),
             TextButton(
@@ -534,7 +599,7 @@ class _HomePageState extends State<HomePage> {
           itemCount: pendientes.length,
           itemBuilder: (context, i) {
             final p = pendientes[i];
-            final indexOriginal = _pedidos.indexWhere((e) => e.carpeta == p.carpeta);
+            final indexOriginal = _pedidos.indexWhere((e) => _normalizar(e.carpeta) == _normalizar(p.carpeta));
             return Dismissible(
               key: Key('${p.carpeta}${p.fechaPedido}$i'),
               direction: DismissDirection.endToStart,
@@ -562,8 +627,6 @@ class _HomePageState extends State<HomePage> {
         );
   }
 }
-
-
 
 
 
@@ -602,6 +665,10 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
     return '${ahora.day.toString().padLeft(2, '0')}/${ahora.month.toString().padLeft(2, '0')}/${ahora.year}';
   }
 
+  String _normalizar(String texto) {
+    return texto.trim().toLowerCase().replaceAll(' ', '');
+  }
+
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -631,6 +698,14 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
       _snack('Selecciona el número de carpeta');
       return;
     }
+
+    final carpetaNorm = _normalizar(carpeta);
+    final existe = widget.pedidos.any((p) => _normalizar(p.carpeta) == carpetaNorm);
+    if (existe) {
+      _snack('Esta carpeta ya está en PEDIDOS');
+      return;
+    }
+
     _mostrarDialogoPedido(carpeta);
   }
 
@@ -646,17 +721,19 @@ class _PantallaTextoCompletoState extends State<PantallaTextoCompleto> {
       return;
     }
 
+    final carpetaNorm = _normalizar(carpeta);
+
     final pedido = widget.pedidos.firstWhere(
-      (p) => p.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase(),
+      (p) => _normalizar(p.carpeta) == carpetaNorm,
       orElse: () => PedidoCarpeta(carpeta: '', folio: '', volante: '', destino: '', fechaPedido: ''),
     );
 
     if (pedido.carpeta.isEmpty) {
-      _mostrarAlerta('esta no la pediste regrésala');
+      _mostrarAlerta('Esta no la pediste, regrésala');
       return;
     }
 
-    final yaRecibida = widget.recibidos.any((r) => r.carpeta.trim().toLowerCase() == carpeta.trim().toLowerCase());
+    final yaRecibida = widget.recibidos.any((r) => _normalizar(r.carpeta) == carpetaNorm);
     if (yaRecibida) {
       _snack('Esta carpeta ya fue recibida');
       return;
@@ -922,7 +999,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 backgroundColor: Colors.red[900],
                 onPressed: _procesando? null : _escanearTexto,
                 icon: _procesando
-         ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.camera, size: 28, color: Colors.white),
                 label: Text(_procesando? 'PROCESANDO...' : 'TOMAR FOTO', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -933,4 +1010,4 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-
+      
